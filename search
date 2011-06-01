@@ -1,0 +1,14 @@
+#!/bin/bash
+domain=$1
+[ -z "${domain}" ] && domain="eftdomain.net"
+ldapsearch -h eftdomain.net \
+           -b "dc=${domain},cn=MicrosoftDNS,cn=System,dc=eftdomain,dc=net" \
+           -D "jameswhite@eftdomain.net" \
+           -s sub -xw ${WINDOWS_PASSWORD} \
+           "(objectClass=dnsNode)" \
+           | tr "\n" "" | sed -e 's/ //g' | tr "" "\n"
+#           | grep "^dnsRecord"|sed -e 's/dnsRecord:: //' \
+#           |while read line ;do \
+#               perl -le 'use MIME::Base64;print unpack("h*",decode_base64($ARGV[0]));' ${line}; 
+#            done
+#           | cut -b -48 | sort

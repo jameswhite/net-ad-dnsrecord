@@ -1,0 +1,16 @@
+# ant03, eftdomain.net, MicrosoftDNS, System, eftdomain.net
+dn: DC=ant03,DC=eftdomain.net,CN=MicrosoftDNS,CN=System,DC=eftdomain,DC=net
+objectClass: top
+objectClass: dnsNode
+distinguishedName: DC=ant03,DC=eftdomain.net,CN=MicrosoftDNS,CN=System,DC=eftdomain,DC=net
+instanceType: 4
+whenCreated: 20110531210339.0Z
+whenChanged: 20110531210354.0Z
+uSNCreated: 11434426
+uSNChanged: 11434426
+showInAdvancedViewOnly: TRUE
+name: ant03
+objectGUID:: 6nhRQkqQokOiA7tL/yNrFw==
+dnsRecord:: BAABAAXwAACTmwAAAAAOEAAAAAAAAAAAwKgC3w==
+objectCategory: CN=Dns-Node,CN=Schema,CN=Configuration,DC=eftdomain,DC=net
+dc: ant03
