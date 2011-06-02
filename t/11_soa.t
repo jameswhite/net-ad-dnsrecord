@@ -1,8 +1,9 @@
-use Test::More tests => 1;
+use Test::More tests => 3;
 BEGIN {
         unshift(@INC,"../lib") if -d "../lib";
         unshift(@INC,"lib") if -d "lib";
         use_ok('DNS::ActiveDirectory');
+        use_ok('DNS::ActiveDirectory::DNSRecord');
       }
 ################################################################################
 $USER="jameswhite";
@@ -16,6 +17,6 @@ my $dns = DNS::ActiveDirectory->new({
                                         'dns_base' => "dc=$AD,cn=MicrosoftDNS,cn=System,$AD_BASE",
                                      });
 if($dns){
-    my @records = $dns->lookup('eftdomain.net');
-    print Data::Dumper->Dump([@records]);
+    my @records = $dns->lookup('ant01');
+#    print Data::Dumper->Dump([@records]);
 }
