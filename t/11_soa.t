@@ -1,5 +1,5 @@
 use Test::More tests => 3;
-print $VERSION
+print $VERSION;
 BEGIN {
         unshift(@INC,"../lib") if -d "../lib";
         unshift(@INC,"lib") if -d "lib";
