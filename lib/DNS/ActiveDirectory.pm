@@ -1,7 +1,9 @@
 package DNS::ActiveDirectory;
 use DNS::ActiveDirectory::DNSRecord;
 use Data::Dumper;
+use MIME::Base64;
 use Net::LDAP;
+use YAML;
 use strict;
 
 sub new{
@@ -17,7 +19,7 @@ sub new{
     if($cnstr->{'dns_base'}){ 
         $self->dns_base($cnstr->{'dns_base'});
     }else{
-        $self->dns_base("dc=".$self->domain.",cn=MicrosoftDNS,cn=System,".$self->basedn);
+        $self->dns_base("DC=".$self->domain.",cn=MicrosoftDNS,cn=System,".$self->basedn);
     }
     
     $self->{'ldap'} = Net::LDAP->new( $self->domain ) or return undef;
@@ -33,11 +35,12 @@ sub new{
 sub lookup{
     my $self=shift;
     my $query=shift if @_;
+    my $type=shift if @_;
     return undef unless $query; 
     my @records;
     my $mesg = $self->{'ldap'}->search( 
                                         'base'   => $self->dns_base,
-                                        'filter' => "(&(objectClass=dnsNode)(dc=$query))",
+                                        'filter' => "(&(objectClass=dnsNode)(DC=$query))",
                                       );
     print STDERR $mesg->error if $mesg->code;
     foreach my $entry ($mesg->entries){
@@ -47,19 +50,142 @@ sub lookup{
             #print Data::Dumper->Dump([@dcs]);
         }else{
             my @dnsrecords=$entry->get_value('dnsRecord');
-            print STDERR $entry->get_value('dc')."\n";
             foreach my $dnsrecord (@dnsrecords){
-                 push(@records,DNS::ActiveDirectory::DNSRecord->new($dnsrecord));
-#                if($record->type){
-#                     print STDERR $record->type;
-#                    if($decoded_record->is_soa){
-#                         print STDERR Data::Dumper->Dump([$decoded_record->{'rdata'}])."\n";
-#                    }
-#                }
+                 my $recobj = DNS::ActiveDirectory::DNSRecord->new($dnsrecord);
+                 if($type){
+                     if(lc($recobj->type) eq lc($type)){
+                         push(@records,$recobj)
+                     }
+                 }else{
+                     push(@records,$recobj)
+                }
             }
         }
     }
     return @records;
+}
+
+sub add{
+    my $self = shift;
+    my $cnstr = shift;
+    my $record = Net::LDAP::Entry->new;
+    my $query = $cnstr->{'name'}; 
+    my $type = $cnstr->{'type'};
+    $cnstr->{'serial'} = $self->soa->update_at_serial;
+    my $dnsrecord = DNS::ActiveDirectory::DNSRecord->new();
+    $dnsrecord->create($cnstr);
+    if($self->lookup($query, $type)){ # the record exists, so we only need update it.
+        my $mesg = $self->{'ldap'}->search(
+                                            'base'   => $self->dns_base,
+                                            'filter' => "(&(objectClass=dnsNode)(DC=$query))",
+                                          );
+        print STDERR $mesg->error if $mesg->code;
+        foreach my $entry ($mesg->entries){
+            my @dcs = $entry->get_value('dc');
+            if($#dcs > 0){
+                print STDERR "multiple ldap entries found for $query\n";
+                #print Data::Dumper->Dump([@dcs]);
+            }else{
+                my @dnsrecords=$entry->get_value('dnsRecord');
+                # look for an exact match
+                push(@dnsrecords,$dnsrecord->raw_record);
+                $entry->replace('dnsRecord'=>\@dnsrecords);
+                $mesg=$entry->update( $self->{'ldap'});
+                print STDERR $mesg->error if $mesg->code;
+            }
+        }
+        return $self;
+    }else{                           # no ldap entry, so create new
+        $record->dn("DC=$query,$self->{'dns_base'}");
+        $record->add(
+                      'objectClass'            => [ 'top', 'dnsNode' ],
+                      'objectCategory'         => "CN=Dns-Node,CN=Schema,CN=Configuration,$self->{'basedn'}",
+                      'distinguishedName'      => "DC=$query,$self->{'dns_base'}",
+                      'dc'                     => "$query",
+                      'name'                   => "$query",
+                      'instanceType'           => 4,
+                      'showInAdvancedViewOnly' => 'TRUE',
+                      'dnsRecord'              => $dnsrecord->raw_record,
+                    );
+        my $mesg = $record->update( $self->{'ldap'} );
+        if($mesg->code){
+            print STDERR $mesg->error."\n";
+            return undef;
+            }
+        return $self;
+    }
+}
+
+sub delete{
+    my $self = shift;
+    my $cnstr = shift;
+    return undef unless $cnstr->{'name'};
+    my $query = $cnstr->{'name'};
+    delete $cnstr->{'name'};
+    my $type = undef;
+    if($cnstr->{'type'}){
+        $type = $cnstr->{'type'};
+        delete $cnstr->{'type'};
+    }
+    my $mesg = $self->{'ldap'}->search(
+                   'base'   => $self->dns_base,
+                   'filter' => "(&(objectClass=dnsNode)(DC=$query))",
+               );
+    if($mesg->code){
+        print STDERR $mesg->error."\n";
+        return undef;
+    }
+    foreach my $entry ($mesg->entries){
+        my @newrecords=();
+        my @dcs = $entry->get_value('dc');
+        if($#dcs > 0){
+            print STDERR "multiple ldap entries found for $query\n";
+            #print Data::Dumper->Dump([@dcs]);
+        }else{
+            my @dnsrecords=$entry->get_value('dnsRecord');
+            foreach my $dnsrecord (@dnsrecords){
+                 my $recobj = DNS::ActiveDirectory::DNSRecord->new($dnsrecord);
+                 if($type){
+                     if(lc($recobj->type) eq lc($type)){
+                         my @attributes = keys(%{ $cnstr });
+                         my $matches=-1;
+                         foreach my $attr (@attributes){
+                             if($recobj->attr($attr) eq $cnstr->{$attr}){
+                                 $matches++;
+                             }
+                         }
+                         push(@newrecords,$dnsrecord) unless ($matches == $#attributes);
+                     }else{
+                         push(@newrecords,$dnsrecord);
+                    }
+                }
+            }
+        }
+        if($#newrecords >= 0){
+            $entry->replace( 'dnsRecord' => \@newrecords );
+        }else{
+            $entry->delete;
+        }
+        my $mesg = $entry->update( $self->{'ldap'} );
+        if($mesg->code){
+            print STDERR $mesg->error."\n";
+            return undef;
+        }
+    }
+    return $self;
+}
+
+sub soa{
+    my $self = shift;
+    my @records = $self->lookup('@','SOA');
+    my @soas;
+    foreach my $record(@records){
+        if($record->type eq 'SOA'){ push(@soas, $record); }
+    }
+    if ($#soas > 0){ 
+        print STDERR "Multiple SOAs on zone, returning first one.\n";
+    }
+    return shift @soas;
 }
 
 sub dns_base{
@@ -89,7 +215,7 @@ sub dns_base{
 sub domain{
     my $self = shift;
     $self->{'domain'} = shift if @_;
-    $self->basedn("dc=".join(",dc=",split(/\./,$self->{'domain'}))) if($self->{'domain'});
+    $self->basedn("DC=".join(",DC=",split(/\./,$self->{'domain'}))) if($self->{'domain'});
     return $self->{'domain'};
 }
 
