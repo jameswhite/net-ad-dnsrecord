@@ -78,7 +78,7 @@ sub type{
        $type = "Specification Required" unless $type;
    }
    if (($self->{'int_type'} >= 65280)&& ($self->{'int_type'} <= 65534)){
-       $type = "Reserved for Privete Use" unless $type;
+       $type = "Reserved for Private Use" unless $type;
    }
    if ($self->{'int_type'} == 65535){
        $type = "Standards Action" unless $type;
@@ -133,22 +133,73 @@ sub create{
         $self->{'unknown_1'}='e001';
         $self->{'timestamp'}=0;
         $self->{'rdata_hex'} = unpack("h*",pack("I",$self->ip2n($cnstr->{'address'})));
+        my $rawdata = pack(
+                            "S S h4 I N h4 I xxxx h*",
+                            $self->{'rdata_len'},
+                            $self->{'int_type'},
+                            $self->{'unknown_0'},
+                            $self->{'update_at_serial'},
+                            $self->{'TTL'},
+                            $self->{'unknown_1'},
+                            $self->{'timestamp'},
+                            $self->{'rdata_hex'},
+                          );
+        $self->{'hexdata'} = unpack("h*",$rawdata);
+    }elsif($cnstr->{'type'} eq 'PTR'){
+        $self->{'int_type'} = 12;
+        $self->{'unknown_0'} = '500f';
+        $self->{'unknown_1'}='e001';
+        $self->{'update_at_serial'} = $cnstr->{'serial'};
+        $self->{'TTL'} = 0;
+        $self->{'timestamp'}=0;
+        $self->{'rdata_hex'} = $self->ptr2rdata($cnstr); 
+        my $rawdata = pack(
+                            "h h h4 h2 h2 h4 I xxxx h*",
+                            $self->{'rdata_len'},
+                            $self->{'int_type'},
+                            $self->{'unknown_0'},
+                            $self->{'update_at_serial'},
+                            $self->{'TTL'},
+                            $self->{'unknown_1'},
+                            $self->{'timestamp'},
+                            $self->{'rdata_hex'},
+                          );
+        $self->{'hexdata'} = unpack("h*",$rawdata);
     }
-    my $rawdata = pack(
-                        "S S h4 I N h4 I xxxx h*",
-                        $self->{'rdata_len'},
-                        $self->{'int_type'},
-                        $self->{'unknown_0'},
-                        $self->{'update_at_serial'},
-                        $self->{'TTL'},
-                        $self->{'unknown_1'},
-                        $self->{'timestamp'},
-                        $self->{'rdata_hex'},
-                      );
-    $self->{'hexdata'} = unpack("h*",$rawdata)."\n";
-    chomp($self->{'hexdata'});
     return $self;
 }
+
+sub ptr2rdata{
+    my $self = shift;
+    my $struct = shift if @_;
+    my $nul = pack("h*","00");
+    my $soh = pack("h*","10");
+    my $ext = pack("h*","30");
+    my $enq = pack("h*","50");
+    my $bel = pack("h*","70");
+    my $tab = pack("h*","90");
+    my $nak = pack("h*","51");
+    my ($name,$domain,$numlabels,$label_length,$length);
+    if($struct->{'name'}){
+        $name=$struct->{'name'};
+        $label_length=length($name);
+    }else{
+        return undef;
+    }
+    if($struct->{'domain'}){
+        $domain=$struct->{'domain'};
+        my @parts = split(/\./,$domain);
+        $numlabels = $#parts + 2;
+    }else{
+        return undef;
+    }
+    my $rawtext=$name . "\t" . $domain;
+    $length=length($name) + length($domain) + $numlabels;
+    $rawtext=~s/\./$ext/; $rawtext.=$nul;
+    my $result = unpack("h*",pack('c c c a*',$length,$numlabels,$label_length,$rawtext));
+    return $result;
+}
+
 
 sub raw_record{ # just so we don't store rawdata and corrupt our tty 
     my $self = shift;
@@ -235,15 +286,43 @@ sub decode{
           $self->{'rdata'}->{'numlabels'},
           $self->{'rdata'}->{'labellen'},
           $self->{'rdata'}->{'hexdata'},
-        ) = unpack("h h h h*", pack("h*",$self->{'record'}->{'rdata'}));
+        ) = unpack("h h h h*", pack("h*",$self->{'rdata_hex'}));
           my $textraw = unpack("a*",pack("h*",$self->{'rdata'}->{'hexdata'}));
           my $ext=pack("h*","30"); $textraw=~s/$ext/\./g;
           my $null=pack("h*","00"); $textraw=~s/$null//g;
           my ($hostpart,$domainpart)=split(/\t/,$textraw);
           $self->{'cname'}="$hostpart.";
           $self->{'cname'}.="$domainpart." if $domainpart;;
+    }elsif($self->type eq 'PTR'){
+        (
+          $self->{'rdata'}->{'labellen'},
+          $self->{'rdata'}->{'numlabels'},
+          $self->{'rdata'}->{'length'}, # length of the first part?
+          $self->{'rdata'}->{'hexdata'},
+        ) = unpack("h h h h*", pack("h*",$self->{'rdata_hex'}));
+        $self->{'name'} = $self->textify($self->{'rdata'}->{'hexdata'});
     } 
     return $self;
+}
+
+sub textify{
+    my $self = shift;
+    my $hexdata = shift if @_;
+    return undef unless $hexdata;
+    my $textraw = unpack("a*",pack("h*",$hexdata));
+    my $nul = pack("h*","00");
+    my $soh = pack("h*","10");
+    my $ext = pack("h*","30");
+    my $enq = pack("h*","50");
+    my $bel = pack("h*","70");
+    my $tab = pack("h*","90");
+    my $nak = pack("h*","51");
+    $textraw=~s/$ext/\./g;
+    $textraw=~s/$nul//g;
+    my ($hostpart,$domainpart)=split(/\t/,$textraw);
+    my $result="$hostpart.";
+    $result.="$domainpart." if $domainpart;
+    return $result;
 }
 
 sub cname { 

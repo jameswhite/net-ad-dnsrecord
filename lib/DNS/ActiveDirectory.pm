@@ -15,11 +15,16 @@ sub new{
     if($cnstr->{'password'}){ $self->password($cnstr->{'password'}) };
 
     if($cnstr->{'domain'}){ $self->domain($cnstr->{'domain'}) };
+    if($cnstr->{'zone'}){ 
+        $self->zone($cnstr->{'zone'}) 
+    }else{
+        $self->zone = $self->domain;
+    };
 
     if($cnstr->{'dns_base'}){ 
         $self->dns_base($cnstr->{'dns_base'});
     }else{
-        $self->dns_base("DC=".$self->domain.",cn=MicrosoftDNS,cn=System,".$self->basedn);
+        $self->dns_base("cn=MicrosoftDNS,cn=System,".$self->basedn);
     }
     
     $self->{'ldap'} = Net::LDAP->new( $self->domain ) or return undef;
@@ -38,10 +43,11 @@ sub lookup{
     my $type=shift if @_;
     return undef unless $query; 
     my @records;
+    #print STDERR "&(objectClass=dnsNode)(DC=$query) dc=".$self->zone.",".$self->dns_base."\n";
     my $mesg = $self->{'ldap'}->search( 
-                                        'base'   => $self->dns_base,
-                                        'filter' => "(&(objectClass=dnsNode)(DC=$query))",
-                                      );
+        'base'   => "dc=".$self->zone.",".$self->dns_base,
+        'filter' => "(&(objectClass=dnsNode)(DC=$query))",
+    );
     print STDERR $mesg->error if $mesg->code;
     foreach my $entry ($mesg->entries){
         my @dcs = $entry->get_value('dc');
@@ -53,6 +59,7 @@ sub lookup{
             foreach my $dnsrecord (@dnsrecords){
                  my $recobj = DNS::ActiveDirectory::DNSRecord->new($dnsrecord);
                  if($type){
+print STDERR Data::Dumper->Dump([$recobj]) if($type eq 'PTR');
                      if(lc($recobj->type) eq lc($type)){
                          push(@records,$recobj)
                      }
@@ -74,9 +81,11 @@ sub add{
     $cnstr->{'serial'} = $self->soa->update_at_serial;
     my $dnsrecord = DNS::ActiveDirectory::DNSRecord->new();
     $dnsrecord->create($cnstr);
+    print STDERR Data::Dumper->Dump([$dnsrecord]);
+return undef if($dnsrecord->type eq 'PTR');
     if($self->lookup($query, $type)){ # the record exists, so we only need update it.
         my $mesg = $self->{'ldap'}->search(
-                                            'base'   => $self->dns_base,
+                                            'base'   => "dc=".$self->zone.",".$self->dns_base,
                                             'filter' => "(&(objectClass=dnsNode)(DC=$query))",
                                           );
         print STDERR $mesg->error if $mesg->code;
@@ -96,11 +105,11 @@ sub add{
         }
         return $self;
     }else{                           # no ldap entry, so create new
-        $record->dn("DC=$query,$self->{'dns_base'}");
+        $record->dn("DC=$query,dc=$self->{'zone'},$self->{'dns_base'}");
         $record->add(
                       'objectClass'            => [ 'top', 'dnsNode' ],
                       'objectCategory'         => "CN=Dns-Node,CN=Schema,CN=Configuration,$self->{'basedn'}",
-                      'distinguishedName'      => "DC=$query,$self->{'dns_base'}",
+                      'distinguishedName'      => "DC=$query,dc=$self->{'zone'}$self->{'dns_base'}",
                       'dc'                     => "$query",
                       'name'                   => "$query",
                       'instanceType'           => 4,
@@ -128,7 +137,7 @@ sub delete{
         delete $cnstr->{'type'};
     }
     my $mesg = $self->{'ldap'}->search(
-                   'base'   => $self->dns_base,
+                   'base'   => "dc=".$self->zone.",".$self->dns_base,
                    'filter' => "(&(objectClass=dnsNode)(DC=$query))",
                );
     if($mesg->code){
@@ -210,6 +219,12 @@ sub dns_base{
     my $self = shift;
     $self->{'dns_base'} = shift if @_;
     return $self->{'dns_base'};
+}
+
+sub zone{
+    my $self = shift;
+    $self->{'zone'} = shift if @_;
+    return $self->{'zone'};
 }
 
 sub domain{
