@@ -14,5 +14,14 @@ sub decode{
     return $self;
 }
 
-sub ipaddress  {        my $self = shift; $self->{'ipaddress'}   = shift if @_;        return $self->{'ipaddress'};        }
+sub encode{
+    my $self = shift;
+    return undef unless $self->{'textdata'};
+    $self->{'ipaddress'}=$self->{'textdata'};
+    $self->{'hexdata'} = unpack("h*",pack('N',$self->ip2n($self->{'textdata'})));
+    return $self;
+}
+
+sub ipaddress  { my $self = shift; $self->{'ipaddress'} = shift if @_; return $self->{'ipaddress'}; }
+sub hexdata  { my $self = shift; $self->{'hexdata'} = shift if @_; return $self->{'hexdata'}; }
 1;

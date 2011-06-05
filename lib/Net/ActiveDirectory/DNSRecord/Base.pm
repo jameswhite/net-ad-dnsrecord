@@ -4,9 +4,15 @@ sub new{
     my $cnstr = shift if @_;
     my $self = {};
     bless $self, $class;
+
     if($cnstr->{'hexdata'}){
         $self->hexdata($cnstr->{'hexdata'});
         $self->decode();
+    }
+
+    if($cnstr->{'textdata'}){
+        $self->textdata($cnstr->{'textdata'});
+        $self->encode();
     }
     return $self;
 }
@@ -28,12 +34,35 @@ sub decode{ # this will need to be overridden
 sub ip2n{
     my $self=shift;
     my $ip=shift if @_;
-    return unpack('N',pack('CCCC',reverse(split(/\./,$ip))));
+    return unpack('N',pack('CCCC',split(/\./,$ip)));
 }
 
 sub n2ip{
     my $self=shift;
     return join('.',map { ($_[0] >> 8*(3-$_)) % 256 } 0 .. 3);
+}
+
+sub pack_text{
+    my $self = shift;
+    my $text = shift if @_;
+    return undef unless $text;
+    $text=~s/\.$//;
+    my @parts=split(/\./,$text);
+    my $fullhex='';
+    my $full_length=0;
+
+    foreach my $part (@parts){
+        my $hexlength = unpack("h*",pack('c',length($part)));
+        my $hex=$hexlength; 
+        $full_length+=length($part);
+        $hex.= unpack("h*",pack("a*",$part));
+        $fullhex .= $hex;
+    }
+
+    #$fullhex = unpack("h*",pack("c c",$full_length + $#parts + 2, $#parts + 1)).$fullhex."00";
+    my $adjusted_length = $full_length + $#parts + 2;
+    $fullhex = unpack("h*",pack("c c",$adjusted_length , $#parts + 1)).$fullhex."00";
+    return $fullhex;
 }
 
 sub unpack_text{
@@ -55,5 +84,6 @@ sub unpack_text{
     return $text;
 }
 
-sub hexdata  {        my $self = shift; $self->{'hexdata'}   = shift if @_;        return $self->{'hexdata'};          }
+sub hexdata  { my $self = shift; $self->{'hexdata'}  = shift if @_; return $self->{'hexdata'};  }
+sub textdata { my $self = shift; $self->{'textdata'} = shift if @_; return $self->{'textdata'}; }
 1;
