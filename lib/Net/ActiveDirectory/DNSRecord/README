@@ -1,0 +1,14 @@
+Base # common functions for all Records
+
+Currently supported record types (new parsers need to be written for other records)
+  - A
+  - CNAME
+  - MX
+  - NS
+  - PTR
+  - SOA (partial, one record's function is unknown, see below)
+  - SRV
+  - TXT
+
+Reserved_for_Private_Use.pm  # one of these on the top-level SOA, no idea...
+Standards_Action.pm          # sometimes seen on PTRs, not sure what this is...

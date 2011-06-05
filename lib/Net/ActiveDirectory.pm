@@ -1,5 +1,6 @@
-package DNS::ActiveDirectory;
-use DNS::ActiveDirectory::DNSRecord;
+#  This is basically an abstraction layer around Net::LDAP to use conventions that Active Directory uses
+package Net::ActiveDirectory;
+use Net::ActiveDirectory::DNSRecord;
 use Data::Dumper;
 use MIME::Base64;
 use Net::LDAP;
@@ -59,7 +60,6 @@ sub lookup{
             foreach my $dnsrecord (@dnsrecords){
                  my $recobj = DNS::ActiveDirectory::DNSRecord->new($dnsrecord);
                  if($type){
-print STDERR Data::Dumper->Dump([$recobj]) if($type eq 'PTR');
                      if(lc($recobj->type) eq lc($type)){
                          push(@records,$recobj)
                      }
@@ -82,7 +82,6 @@ sub add{
     my $dnsrecord = DNS::ActiveDirectory::DNSRecord->new();
     $dnsrecord->create($cnstr);
     print STDERR Data::Dumper->Dump([$dnsrecord]);
-return undef if($dnsrecord->type eq 'PTR');
     if($self->lookup($query, $type)){ # the record exists, so we only need update it.
         my $mesg = $self->{'ldap'}->search(
                                             'base'   => "dc=".$self->zone.",".$self->dns_base,

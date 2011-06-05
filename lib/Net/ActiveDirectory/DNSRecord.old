@@ -1,16 +1,11 @@
-#!/usr/bin/perl -w
+package Net::ActiveDirectory::DNSRecord;
 # hat-tip http://www.indented.co.uk/index.php/2009/06/18/mapping-the-dnsrecord-attribute/
-package DNS::ActiveDirectory::DNSRecord;
-use strict;
+use Net::ActiveDirectory::DNSRecord::A;
 use Data::Dumper;
 use MIME::Base64;
-use Config;
+use strict;
 
-#my $debug=0;
-#print "short == $Config{shortsize}\n" if $debug;
-#print "int   == $Config{intsize}\n" if $debug;
-
-sub new{
+sub new {
     my $class = shift;
     my $binarydata = shift if @_;
     my $self = {};
@@ -90,35 +85,6 @@ sub update_at_serial{
     my $self = shift;
     return $self->{'update_at_serial'} if $self->{'update_at_serial'};
     return undef;
-}
-
-sub a_record{
-    my $self = shift; 
-    my $ip = shift if @_;
-    return undef unless $ip;
-    my $record = {
-                   'unknown_1' => 'e001',
-                   'unknown_0' => '500f',
-                   'rdata_len' => 4,
-                   'timestamp' => 0,
-                   'type' => 1,
-                   'update_at_serial' => 2610102272,
-                   'TTL' => 0,
-                   'rdata' => unpack('h*',pack('N',$self->ip2n($ip)))
-                 };
-    my $rawdata = pack("S< S< h4 I< I> h4 I xxxx h*", 
-                        ( $record->{'rdata_len'},
-                          $record->{'type'},
-                          $record->{'unknown_0'},
-                          $record->{'update_at_serial'},
-                          $record->{'TTL'},
-                          $record->{'unknown_1'},
-                          $record->{'timestamp'},
-                          $record->{'rdata'},
-                        ));
-   my $hexdata = unpack("h*", $rawdata);
-   my $mimedata = encode_base64(pack("h*",$hexdata));
-   return $rawdata;
 }
 
 sub create{
