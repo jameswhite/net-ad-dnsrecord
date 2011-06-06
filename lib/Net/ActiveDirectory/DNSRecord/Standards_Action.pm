@@ -18,4 +18,6 @@ sub zoneform{ # this will need to be overridden
 #}
 
 
+sub hexdata  { my $self = shift; $self->{'hexdata'}  = shift if @_; return $self->{'hexdata'};  }
+
 1;

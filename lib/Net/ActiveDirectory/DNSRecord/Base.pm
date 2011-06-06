@@ -84,6 +84,6 @@ sub unpack_text{
     return $text;
 }
 
-sub hexdata  { my $self = shift; $self->{'hexdata'}  = shift if @_; return $self->{'hexdata'};  }
+#sub hexdata  { my $self = shift; $self->{'hexdata'}  = shift if @_; return $self->{'hexdata'};  }
 sub textdata { my $self = shift; $self->{'textdata'} = shift if @_; return $self->{'textdata'}; }
 1;

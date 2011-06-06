@@ -22,47 +22,76 @@ sub decode{
       $remainder,
     ) = unpack("N N N N N h*", pack("h*",$self->{'hexdata'}));
 
-    ( $length, $parts, $sizelabel, $remainder ) = unpack("c c c h*", pack("h*",$remainder));
-    $chars = 'a'.($length -1 );
-    ( $self->{'soa_host'}, $remainder ) = unpack("$chars h*", pack("h*",$remainder));
-    $self->{'soa_host'}=~s/$tab/\./g; $self->{'soa_host'}=~s/$etx/\./g; $self->{'soa_host'}=~s/$nul//g;
-    $self->{'soa_host'}.='.';
+    ############################################################################
+    # get the host string
+    ( $length, $parts, $remainder ) = unpack("c c h*", pack("h*",$remainder));
+    for (my $i=0;$i<$parts;$i++){
+        ($label_length, $remainder) = unpack("c h*", pack("h*",$remainder));
+        ($append, $remainder) = unpack("a$label_length h*",pack("h*",$remainder));
+        $text.="$append.";
+    #    print STDERR "Unpacked $label_length bytes of $remainder => [$text]\n";
+    }
+    $self->{'soa_host'}=$text;
+    $text=undef;
+    (my $null, $remainder) = unpack("h h*",pack("h*",$remainder));
+    #
+    ############################################################################
  
-    ( $length, $parts, $sizelabel, $remainder ) = unpack("c c c h*", pack("h*",$remainder));
-    $chars = 'a'.($length -1 );
-    ( $self->{'soa_email'}) = unpack("$chars", pack("h*",$remainder));
-    $self->{'soa_email'}=~s/$tab/\./g; $self->{'soa_email'}=~s/$etx/\./g; $self->{'soa_email'}=~s/$nul//g;
-    $self->{'soa_email'}.='.';
-
-    #my $newline = pack("h*","a0");$textraw=~s/$newline/[NEWLINE]/g; # split on newline
-    #my $nul = pack("h*","00");$textraw=~s/$nul/          /g;        #split on null
-    #my $soh = pack("h*","10");$textraw=~s/$soh/[SOH]/g;
-    #my $sub = pack("h*","a1");$textraw=~s/$sub/[SUB]/g;
-    #my $ext = pack("h*","30");$textraw=~s/$ext/[ETX]/g;
-    #my $enq = pack("h*","50");$textraw=~s/$enq/[ENQ]/g;
-    #my $bel = pack("h*","70");$textraw=~s/$bel/[BEL]/g;
-    #my $tab = pack("h*","90");$textraw=~s/$tab/[TAB]/g;
-    #my $nak = pack("h*","51");$textraw=~s/$nak/[NAK]/g;
-    #$textraw=~s/[^a-zA-Z0-9\[\]]/[??]/g;
-
-    ######################################################################
-    # Here are some of the soa record packs I've seen:     perhaps:  <length+1><numlabels><sizelabel>
-    # <fqdn> [NULL]  [SUB][ETX][NEWLINE]  <fqemail>[NUL]    a130a0  hostmaster[TAB]eftdomain[ETX]net[NUL] : 26 char (inc null) 
-    # <fqdn> [NULL]  [NAK][ETX][ENQ]      <fqemail>[NUL]    513050  admin[TAB]eftdomain[ETX]net[NUL]      : 20 char (inc null)
-    # <fqdn> [NULL]  [BEL][SOH][ENQ]      <fqemail>[NUL]    701050  admin[NUL]                            : 06 char (inc null)
+    ############################################################################
+    # get the email string
+    ( $length, $parts, $remainder ) = unpack("c c h*", pack("h*",$remainder));
+    for (my $i=0;$i<$parts;$i++){
+        ($label_length, $remainder) = unpack("c h*", pack("h*",$remainder));
+        ($append, $remainder) = unpack("a$label_length h*",pack("h*",$remainder));
+        $text.="$append.";
+    #    print STDERR "Unpacked $label_length bytes of $remainder => [$text]\n";
+    }
+    $self->{'soa_email'}=$text;
+    $text=undef;
     #
-    # where <fqdn> and <fqemail> take the form:
-    #
-    # host[TAB]domain[ETX]com  or  user[TAB]domain[ETX]org 
-    # 
-    ######################################################################
-#print $self->zoneform."\n";
+    ############################################################################
     return $self;
 }
 
-sub hexdata  { my $self = shift; $self->{'hexdata'} = shift if @_; return $self->{'hexdata'}; }
-sub textraw  { my $self = shift; $self->{'textraw'} = shift if @_; return $self->{'textraw'}; }
-sub soa_host  { my $self = shift; $self->{'soa_host'} = shift if @_; return $self->{'soa_host'}; }
-sub soa_email  { my $self = shift; $self->{'soa_email'} = shift if @_; return $self->{'soa_email'}; }
+sub hexdata   { 
+    my $self = shift; 
+    $self->{'hexdata'} = shift if @_;   
+    if($self->{'crafted'}){
+        $self->{'hexdata'} = unpack("h*",pack("N N N N N",(
+                                                           $self->{'serial'},
+                                                           $self->{'refresh'},
+                                                           $self->{'retry'},
+                                                           $self->{'expire'},
+                                                           $self->{'min_TTL'},
+                                                         ))
+                                 );
+        my $host = $self->{'soa_host'};
+        $host=~s/\.$//;
+        my $hex_host = $self->pack_text($host);
+        $self->{'hexdata'}.= $hex_host;
+        my $email = $self->{'soa_email'};
+        $email=~s/\.$//;
+        my $hex_email = $self->pack_text($email);
+        $self->{'hexdata'}.= $hex_email;
+    }
+    return $self->{'hexdata'};   
+}
+
+sub encode{
+    # this is a null function, all attrs need to be set manually
+    my $self = shift;
+    $self->{'crafted'}=1;
+    return $self;
+}
+
+sub textraw   { my $self = shift; $self->{'textraw'} = shift if @_;   return $self->{'textraw'};   }
+sub soa_host  { my $self = shift; $self->{'soa_host'} = shift if @_;  return $self->{'soa_host'};  }
+sub soa_email { my $self = shift; $self->{'soa_email'} = shift if @_; return $self->{'soa_email'}; }
+sub serial    { my $self = shift; $self->{'serial'} = shift if @_;    return $self->{'serial'};    }
+sub refresh   { my $self = shift; $self->{'refresh'} = shift if @_;   return $self->{'refresh'};   }
+sub retry     { my $self = shift; $self->{'retry'} = shift if @_;     return $self->{'retry'};     }
+sub expire    { my $self = shift; $self->{'expire'} = shift if @_;    return $self->{'expire'};    }
+sub min_TTL   { my $self = shift; $self->{'min_TTL'} = shift if @_;   return $self->{'min_TTL'};   }
+
 
 1;

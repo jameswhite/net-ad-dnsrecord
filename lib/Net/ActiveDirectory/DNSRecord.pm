@@ -30,7 +30,13 @@ sub craft {
     my $cnstr = shift if @_;
     my $self = {};
     bless $self, $class;
+    if(!defined($cnstr->{'textdata'})){
+        if(defined($cnstr->{'data'})){
+            $cnstr->{'textdata'} = $cnstr->{'data'};
+        }
+    }
     $self->encode({'type' => $cnstr->{'type'}, 'textdata' => $cnstr->{'textdata'} }) if $cnstr;
+    $self->{'update_at_serial'} = $cnstr->{'update_at_serial'} if( $cnstr->{'update_at_serial'});
     return $self;
 }
 
@@ -109,7 +115,7 @@ sub update_at_serial{
 
 sub raw_record{ # just so we don't store rawdata and corrupt our tty 
     my $self = shift;
-    return pack("h*",$self->{'hexdata'}) if $self->{'hexdata'};
+    return pack("h*",$self->hexdata);
     return undef;
 }
 
@@ -123,20 +129,51 @@ sub decode{
     (
       $self->{'rdata_len'},
       $self->{'int_type'},
-      $self->{'unknown_0'}, # not sure what this is for '500f' (0xf005)
+      $self->{'unknown_0'}, # not sure what this is for '500f0000' (0xf005)
       $self->{'update_at_serial'},
       $self->{'TTL'},
-      $self->{'unknown_1'}, # not sure what this is for 'e001' (0x100e)
+      $self->{'unknown_1'}, # not sure what this is for...
       $self->{'timestamp'}, ## 0 if static
       $self->{'rdata_hex'},
-    ) = unpack("S S h4 I I h4 I xxxx h*", $rawdata);
-#    #           2  2  4  4  4  4  4  4 == 32 bytes
-#    ) = unpack("S< S< h4 I< I> h4 I xxxx h*", $rawdata); # perl 5.10 syntax
+    ) = unpack("S S h8 I N h8 I h*", $rawdata);
+#    #          2 2 4  4 4  4 4 4 == 32 bytes + rdata
+#    ) = unpack("S< S< h4 I< I> h4 I h*", $rawdata); # perl 5.10 syntax
     $self->{'type'} = $self->type;
     my $record_pkg = __PACKAGE__.'::'.$self->{'type'};
     $self->{'rdata'} = $record_pkg->new({ hexdata => $self->{'rdata_hex'} });
     return $self;
 }
+
+#sub a_record{
+#    my $self = shift;
+#    my $ip = shift if @_;
+#    return undef unless $ip;
+#    my $record = {
+#                   'unknown_1' => '00000000',
+#                   'unknown_0' => '500f0000',
+#                   'rdata_len' => 4,
+#                   'timestamp' => 0,
+#                   'type' => 1,
+#                   'updated_serial' => 2610102272,
+#                   'TTL' => 0,
+#                   'rdata' => unpack('h*',pack('CCCC',split(/\./,$ip)))
+#                 };
+#    my $rawdata = pack("S S h8 N I h8 I h*",
+#                      #"S S I  I N I I h*"
+#                        ( $record->{'rdata_len'},
+#                          $record->{'type'},
+#                          $record->{'unknown_0'},
+#                          $record->{'updated_serial'},
+#                          $record->{'TTL'},
+#                          $record->{'unknown_1'},
+#                          $record->{'timestamp'},
+#                          $record->{'rdata'},
+#                        ));
+#   my $hexdata = unpack("h*", $rawdata);
+#   my $mimedata = encode_base64(pack("h*",$hexdata));
+#   #print STDERR Data::Dumper->Dump([$record,$hexdata,$mimedata]);
+#   return $rawdata;
+#}
 
 sub encode{
     my $self = shift;
@@ -149,19 +186,19 @@ sub encode{
     }
     $self->{'rdata_len'}=length(pack("h*",$self->{'rdata'}->hexdata));
     $self->{'int_type'} = $self->int_type;
-    $self->{'unknown_0'} = '500f';
+    $self->{'unknown_0'} = '500f0000';
     $self->{'update_at_serial'} = 0,
     $self->{'TTL'} = 0;
-    $self->{'unknown_1'} = 'e001';
-    $self->{'timestamp'} = 0;
+    $self->{'unknown_1'} = '00000000';
+    $self->{'timestamp'} = 0; #static
     $self->{'rdata_hex'} = $self->{'rdata'}->hexdata;
     return $self;
 }
 
 sub hexdata  {
     my $self = shift; 
-    #print Data::Dumper->Dump([$self]);
-    my $rawdata = pack("S S h4 I I h4 I h4 h*", (
+    $self->{'rdata_len'} = length(pack("h*",$self->{'rdata'}->hexdata));
+    my $rawdata = pack("S S h8 I N h8 I  h*", (
                                                     $self->{'rdata_len'},
                                                     $self->{'int_type'},
                                                     $self->{'unknown_0'},
@@ -169,8 +206,7 @@ sub hexdata  {
                                                     $self->{'TTL'},
                                                     $self->{'unknown_1'},
                                                     $self->{'timestamp'},
-                                                    '0000',
-                                                    $self->{'rdata_hex'},
+                                                    $self->{'rdata'}->hexdata,
                                                 ));
     $self->{'hexdata'} = unpack("h*",$rawdata);
     return $self->{'hexdata'};          
@@ -182,6 +218,7 @@ sub rdata_len{        my $self = shift; $self->{'rdata_len'} = shift if @_;     
 sub rdata_hex{        my $self = shift; $self->{'rdata_hex'} = shift if @_;        return $self->{'rdata_hex'};        }
 sub rdata    {        my $self = shift; $self->{'rdata'}     = shift if @_;        return $self->{'rdata'};            }
 sub timestamp{        my $self = shift; $self->{'timestamp'} = shift if @_;        return $self->{'timestamp'};        }
+sub TTL{        my $self = shift; $self->{'TTL'} = shift if @_;        return $self->{'TTL'};        }
 sub rdata_hex{        my $self = shift; $self->{'rdata_hex'} = shift if @_;        return $self->{'rdata_hex'};        }
 sub unknown_0{        my $self = shift; $self->{'unknown_0'} = shift if @_;        return $self->{'unknown_0'};        }
 sub unknown_1{        my $self = shift; $self->{'unknown_1'} = shift if @_;        return $self->{'unknown_1'};        }

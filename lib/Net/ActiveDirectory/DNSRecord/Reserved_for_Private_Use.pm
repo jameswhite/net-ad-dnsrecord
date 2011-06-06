@@ -8,4 +8,6 @@ sub zoneform{ # this will need to be overridden
     return "unparsed: IN $type ".$self->hexdata;
 }
 
+sub hexdata  { my $self = shift; $self->{'hexdata'}  = shift if @_; return $self->{'hexdata'};  }
+
 1;

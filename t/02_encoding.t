@@ -1,27 +1,27 @@
-use Test::More tests => 7;
+use Test::More tests => 8;
 use Net::LDAP;
 use Data::Dumper;
+use strict;
 BEGIN {
         unshift(@INC,"../lib") if -d "../lib";
         unshift(@INC,"lib") if -d "lib";
         use_ok('Net::ActiveDirectory');
       }
 ################################################################################
-$USER="jameswhite";
-$DOMAIN="eftdomain.net"; 
-$BASEDN="DC=".join(",DC=",split(/\./,$DOMAIN));
+my ($USER, $DOMAIN) =("jameswhite", "eftdomain.net"); 
+my $BASEDN="DC=".join(",DC=",split(/\./,$DOMAIN));
 ################################################################################
 my $dns;
 my $ad = Net::LDAP->new( $DOMAIN ) or return undef;
 $ad->bind( $USER.'@'.$DOMAIN, password => $ENV{'WINDOWS_PASSWORD'} );
-my $zmsg = $ad->search(
+my $mesg = $ad->search(
                         'base'   => "cn=MicrosoftDNS,cn=System,".$BASEDN,
                         'filter' => "(objectClass=dnsZone)",
                         'scope'  => 'sub',
                        );
-print STDERR $mesg->error if $zmsg->code;
+print STDERR $mesg->error if $mesg->code;
 # read in all the zones into the zone hash
-foreach my $zone ($zmsg->entries){
+foreach my $zone ($mesg->entries){
     my $nmsg = $ad->search(
                             'base'   => $zone->dn,
                             'filter' => "(objectClass=dnsNode)",
@@ -36,7 +36,7 @@ foreach my $zone ($zmsg->entries){
     }
 }
 
-my $dump=1;
+my $dump=0;
 if($dump){
     print "dns:\n";
     foreach my $z (sort(keys(%{$dns}))){
@@ -50,7 +50,7 @@ if($dump){
     }
 }
 
-my $test_encoding=0;
+my $test_encoding=1;
 if($test_encoding){
     my $all_a_ok = 1;
     my $all_cname_ok = 1;
@@ -58,6 +58,7 @@ if($test_encoding){
     my $all_txt_ok = 1;
     my $all_ns_ok = 1;
     my $all_srv_ok = 1;
+    my $all_soa_ok = 1;
     foreach my $z (sort(keys(%{$dns}))){
         foreach my $n (sort(keys(%{ $dns->{$z} }))){
             foreach my $r_in (sort(@{ $dns->{$z}->{$n} })){
@@ -73,6 +74,8 @@ if($test_encoding){
                     $r_out->serial($r_in->serial);
                     $r_out->unknown_0($r_in->unknown_0);
                     $r_out->unknown_1($r_in->unknown_1);
+                    $r_out->TTL($r_in->TTL);
+                    $r_out->timestamp($r_in->timestamp);
                     if($r_in->hexdata ne $r_out->hexdata){
                         $all_a_ok = 0; 
                         print "1:[".$r_in->hexdata."]\n";
@@ -87,6 +90,8 @@ if($test_encoding){
                     $r_out->serial($r_in->serial);
                     $r_out->unknown_0($r_in->unknown_0);
                     $r_out->unknown_1($r_in->unknown_1);
+                    $r_out->TTL($r_in->TTL);
+                    $r_out->timestamp($r_in->timestamp);
                    if($r_in->hexdata ne $r_out->hexdata){
                        $all_cname_ok = 0; 
                        print "1:[".$r_in->hexdata."]\n";
@@ -101,6 +106,8 @@ if($test_encoding){
                     $r_out->serial($r_in->serial);
                     $r_out->unknown_0($r_in->unknown_0);
                     $r_out->unknown_1($r_in->unknown_1);
+                    $r_out->TTL($r_in->TTL);
+                    $r_out->timestamp($r_in->timestamp);
                    if($r_in->hexdata ne $r_out->hexdata){
                        $all_ptr_ok = 0; 
                        print "1:[".$r_in->hexdata."]\n";
@@ -115,6 +122,8 @@ if($test_encoding){
                     $r_out->serial($r_in->serial);
                     $r_out->unknown_0($r_in->unknown_0);
                     $r_out->unknown_1($r_in->unknown_1);
+                    $r_out->TTL($r_in->TTL);
+                    $r_out->timestamp($r_in->timestamp);
                    if($r_in->hexdata ne $r_out->hexdata){
                        $all_txt_ok = 0; 
                        print "1:[".$r_in->hexdata."]\n";
@@ -129,6 +138,8 @@ if($test_encoding){
                     $r_out->serial($r_in->serial);
                     $r_out->unknown_0($r_in->unknown_0);
                     $r_out->unknown_1($r_in->unknown_1);
+                    $r_out->TTL($r_in->TTL);
+                    $r_out->timestamp($r_in->timestamp);
                    if($r_in->hexdata ne $r_out->hexdata){
                        $all_ns_ok = 0; 
                        print "1:[".$r_in->hexdata."]\n";
@@ -136,7 +147,6 @@ if($test_encoding){
                    }
                 }elsif($r_in->type eq 'SRV'){
                     my $srv = $r_in->rdata->srv;
-#print Data::Dumper->Dump([$r_in]);
                     my $r_out = Net::ActiveDirectory::DNSRecord->craft({
                                     'type' => $r_in->type, 
                                     'textdata' => $r_in->rdata->srv,
@@ -144,6 +154,8 @@ if($test_encoding){
                     $r_out->serial($r_in->serial);
                     $r_out->unknown_0($r_in->unknown_0);
                     $r_out->unknown_1($r_in->unknown_1);
+                    $r_out->TTL($r_in->TTL);
+                    $r_out->timestamp($r_in->timestamp);
                     $r_out->{'rdata'}->priority($r_in->{'rdata'}->priority);
                     $r_out->{'rdata'}->weight($r_in->{'rdata'}->weight);
                     $r_out->{'rdata'}->port($r_in->{'rdata'}->port);
@@ -152,9 +164,30 @@ if($test_encoding){
                         print "1:[".$r_in->hexdata."]\n";
                         print "2:[".$r_out->hexdata."]\n";
                     }
-#print Data::Dumper->Dump([$r_out]);
-                #}elsif($r_in->type eq 'A'){
-                }
+                }elsif($r_in->type eq 'SOA'){
+                    my $r_out = Net::ActiveDirectory::DNSRecord->craft({
+                                    'type' => $r_in->type, 
+                                    'textdata' => $r_in->rdata->zoneform,
+                                });
+                    $r_out->serial($r_in->serial);
+                    $r_out->unknown_0($r_in->unknown_0);
+                    $r_out->unknown_1($r_in->unknown_1);
+                    $r_out->TTL($r_in->TTL);
+                    $r_out->timestamp($r_in->timestamp);
+                    $r_out->{'rdata'}->soa_host($r_in->{'rdata'}->soa_host);
+                    $r_out->{'rdata'}->soa_email($r_in->{'rdata'}->soa_email);
+                    $r_out->{'rdata'}->serial($r_in->{'rdata'}->serial);
+                    $r_out->{'rdata'}->refresh($r_in->{'rdata'}->refresh);
+                    $r_out->{'rdata'}->retry($r_in->{'rdata'}->retry);
+                    $r_out->{'rdata'}->expire($r_in->{'rdata'}->expire);
+                    $r_out->{'rdata'}->min_TTL($r_in->{'rdata'}->min_TTL);
+                    if($r_in->hexdata ne $r_out->hexdata){
+                        $all_soa_ok = 0; 
+                        print "1:[".$r_in->hexdata."]\n";
+                        print "2:[".$r_out->hexdata."]\n";
+                    }
+                #}elsif($r_in->type eq 'SRV'){
+               }
             }
         }
     }
@@ -164,4 +197,5 @@ if($test_encoding){
     is($all_txt_ok, 1, 'TXT records pack as un-packed');
     is($all_ns_ok, 1, 'NS records pack as un-packed');
     is($all_srv_ok, 1, 'SRV records pack as un-packed');
+    is($all_soa_ok, 1, 'SOA records pack as un-packed');
 }

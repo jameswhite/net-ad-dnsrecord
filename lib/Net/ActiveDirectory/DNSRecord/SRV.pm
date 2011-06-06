@@ -34,30 +34,54 @@ sub encode{
     return $self;
 }
 
-sub hexdata { 
+sub hexdata{ 
     my $self = shift; 
     $self->{'hexdata'} = shift if @_; 
-    return $self->{'hexdata'}; 
-    print "-=[$self->{'priority'} $self->{'weight'} $self->{'port'} $self->{'textpart'} ]=-\n";
-#    $self->{'hexdata'} = unpack(
-#                                 "h*",pack( 
-#                                            "n n n h*", 
-#                                            ( 
-#                                              $self->{'priority'},
-#                                              $self->{'weight'},
-#                                              $self->{'port'},
-#                                              $self->{'srv'},
-#                                            )
-#                                          )
-#                               );
+    if($self->{'textpart'}){ # should only exist on encode(() ergo only on craft()
+        $self->{'hexdata'} = unpack(
+                                     "h*",pack( 
+                                                "n n n", 
+                                                ( 
+                                                  $self->{'priority'},
+                                                  $self->{'weight'},
+                                                  $self->{'port'},
+                                                )
+                                              )
+                                   );
+        $self->{'hexdata'}.=$self->{'textpart'};
+    }
     return $self->{'hexdata'};
 }
 
 
-sub srv  { my $self = shift; $self->{'srv'} = shift if @_; return $self->{'srv'}; }
-sub priority  { my $self = shift; $self->{'priority'} = shift if @_; return $self->{'priority'}; }
-sub weight  { my $self = shift; $self->{'weight'} = shift if @_; return $self->{'weight'}; }
-sub port  { my $self = shift; $self->{'port'} = shift if @_; return $self->{'port'}; }
-sub textdata { my $self = shift; $self->{'textdata'} = shift if @_; return $self->{'textdata'}; }
+sub srv  { 
+    my $self = shift; 
+    $self->{'srv'} = shift if @_; 
+    return $self->{'srv'}; 
+}
+
+sub priority  { 
+    my $self = shift; 
+    $self->{'priority'} = shift if @_; 
+    return $self->{'priority'}; 
+}
+
+sub weight  { 
+    my $self = shift; 
+    $self->{'weight'} = shift if @_; 
+    return $self->{'weight'}; 
+}
+
+sub port  { 
+    my $self = shift; 
+    $self->{'port'} = shift if @_; 
+    return $self->{'port'}; 
+}
+
+sub textdata { 
+    my $self = shift; 
+    $self->{'textdata'} = shift if @_; 
+    return $self->{'textdata'}; 
+}
 
 1;
