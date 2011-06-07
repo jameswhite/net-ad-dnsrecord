@@ -1,7 +1,7 @@
 #!/bin/bash
 domain=$1
 [ -z "${domain}" ] && domain="eftdomain.net"
-ldapsearch -h eftdomain.net \
+ldapsearch -h cronus.eftdomain.net \
            -b "dc=${domain},cn=MicrosoftDNS,cn=System,dc=eftdomain,dc=net" \
            -D "jameswhite@eftdomain.net" \
            -s sub -xw ${WINDOWS_PASSWORD} \

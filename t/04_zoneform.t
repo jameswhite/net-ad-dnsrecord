@@ -14,6 +14,12 @@ my $ad = Net::ActiveDirectory->new({
                                      'username' => "$USER",
                                      'password' => $ENV{'WINDOWS_PASSWORD'},
                                   });
+
+$ad->exists("ant01.eftdoamin.net IN A 192.168.2.222");
+$ad->exists("192.168.2.222 IN PTR ant01.eftdomain.net");
+$ad->exists("192.168.2.222 IN PTR ant01.eftdomain.net");
+
+
 my @zones = $ad->all_zones;
 print join(":",@zones)."\n";
 
@@ -47,9 +53,9 @@ print "--\n";
 # Low-level adding:
 $ad->add({ 
            'zone' => 'eftdomain.net', 
-           'name' => 'ant10', 
+           'name' => 'ant07', 
            'type' => 'A', 
-           'data' => '192.168.2.230' 
+           'data' => '192.168.2.227' 
         });
 
 print "--\n";
@@ -59,21 +65,21 @@ foreach my $record (@records){
     print "Found added: ".$record->rdata->zoneform."\n";
 }
 
-#print "--\n";
-#print "Removing.\n";
-## remove it
-#$ad->delete({
-#              'zone' => 'eftdomain.net', 
-#              'name' => 'ant07',
-#              'type' => 'A', 
-#              'data' => '192.168.2.227',
-#           });
-#
-#print "--\n";
-## see if it's gone
-#my @records = $ad->nslookup('ant07','A');
-#print "Deleted and Found: ".$#records."\n";
-#
+print "--\n";
+print "Removing.\n";
+# remove it
+$ad->delete({
+              'zone' => 'eftdomain.net', 
+              'name' => 'ant07',
+              'type' => 'A', 
+              'data' => '192.168.2.227',
+           });
+
+print "--\n";
+# see if it's gone
+my @records = $ad->nslookup('ant07','A');
+print "Deleted and Found: ".$#records."\n";
+
 
 #$ad->add({ 
 #                 'zone' => 'eftdomain.net', 

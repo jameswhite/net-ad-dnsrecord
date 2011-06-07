@@ -1,0 +1,68 @@
+The tombstoned time of a DNS record is stored in AD in the DNSRecord attrubute alonside a dNSTombstoned: TRUE attribute:
+
+################################################################################
+# ant12, example.net, MicrosoftDNS, System, example.net
+dn: DC=ant12,DC=example.net,CN=MicrosoftDNS,CN=System,DC=example,DC=net
+objectClass: top
+objectClass: dnsNode
+distinguishedName: DC=ant12,DC=example.net,CN=MicrosoftDNS,CN=System,DC=example,DC=net
+instanceType: 4
+whenCreated: 20110607142903.0Z
+whenChanged: 20110607143718.0Z
+uSNCreated: 13202218
+uSNChanged: 13203343
+showInAdvancedViewOnly: TRUE
+name: ant12
+objectGUID:: H26ChbVnJk23aezGIRF9og==
+dnsRecord:: CAAAAAUAAACjnQAAAAAAAAAAAAAAAAAALibXZiAlzAE=
+objectCategory: CN=Dns-Node,CN=Schema,CN=Configuration,DC=example,DC=net
+dNSTombstoned: TRUE
+dc: ant12
+################################################################################
+The dNSRecord still honors the data format, but has a DNS "type" of 0
+
+perl -le -MMIME::Base 64 'print unpack("h*",decode_base64("CAAAAAUAAACjnQAAAAAAAAAAAAAAAAAALibXZiAlzAE="))."\n";'
+80000000500000003ad90000000000000000000000000000e2627d660252cc10
+
+rdata  type  update@   unknown    TTL    unknown timestmp     rdata
+length                  flags)
+ 8000  0000  50000000  3ad90000 00000000 00000000 00000000 e2627d660252cc10
+
+now the rdata is the 64-bit NT_TIME that can be converted to/from unixtime as follows:
+(on 32-bit systems, it's easier on 64-bit perl because unpack "Q" is available)
+
+################################################################################
+#!/usr/bin/perl
+# This works for an unpack("h*",data), if you use 'H*' 
+# you'll need to unpack("h*",pack("H*", $it)) first.
+
+my @times=(
+            "0a1281077252cc10",
+            "2ddd47377252cc10",
+            "cbc541777252cc10",
+            "624cfba77252cc10",
+            "44d89ee77252cc10",
+            "cc9a68287252cc10",
+            "ea6048587252cc10",
+            "60ae7e887252cc10",
+);
+
+sub nt2unix{
+    my $nt_time = shift;
+    my($lo,$hi) = unpack('VV',pack('h8h8',unpack('A8A8',pack('A16',$nt_time))));
+    return ( ( ( $hi * 2**32 + $lo ) - 116444736e9 ) / 1e7 );
+}
+
+sub unix2nt{
+    my $unix_time=shift;
+    my $bigtime=(($unix_time * 1e7) + 116444736e9);
+    my $hi = int($bigtime/2**32);
+    my $lo = $bigtime - ($hi * 2**32);
+    my $nt_time = unpack('A16',pack('A8A8',unpack("h8h8",pack('VV',($lo,$hi)))));
+    return $nt_time;
+}
+
+foreach my $time (@times){
+    print $time." -> ".int(nt2unix($time))." -> ".scalar(localtime(int(nt2unix($time))))." -> ".unix2nt(nt2unix($time))."\n";
+}
+

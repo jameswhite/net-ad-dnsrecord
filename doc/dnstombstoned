@@ -1,0 +1,30 @@
+http://dnsfunda.blogspot.com/
+Monday, October 30, 2006
+TITLE: AD integrated DNS and record deletion
+===========================================
+
+When AD objects are deleted they are tombstoned. It is as if they are gone from AD. However a remnant of the object, the tombstone, persists for replication purposes. Over time the tombstone is removed and the object is truly gone from AD.
+So if we are chasing a deleted object to see who/how/when it was deleted we need to look at its tombstone. An authoritative restore will remove the tombstone when the object is restored so we can only look at the tombstone in a domain where the object is deleted.
+Finally, DNS objects have their own deletion/tombstone process. Depending on the method of deletion there are two ways to search for the deleted DNS objects as there are two tombstones (dNSTombstoned and isDeleted).
+dNSTombstoned: If a record is deleted in the MMC for dnsmgmt.msc the object still exists but dns.exe will no longer load the value. isDeleted: isDeleted is the AD "tombstone" for the deletion of the object from the AD.
+Once we determine if the DNS recored is dNSTombstoned or AD tombstoned we then use "repadmin /showmeta
+" and this will show us the time/date that each attribute for this object was created, edited, or marked for deletion. This shows the originating source DC of this change. From there we may be able to determine who/what was on that source DC at the time.
+Viewing deleted objects in Active Directory (258310)http://support.microsoft.com/default.aspx?scid=KB;EN-US;258310
+How does the dnsTombstoned attribute tie in with aging and scavenging? ==============
+The DNS service picks up the deletion of DNS records via the dnsTombstoned attribute. The DNS service maintains a copy of the zone in memory for performance. When a DNS server receives inbound AD replication of a dnsTombstoned attribute that is set to TRUE, it deletes that record from the in-memory copy of the zone. In addition the DNS service will no longer load records from AD which have a dnsTombstoned attribute set to TRUE. Once a record\u2019s dnsTombstoned attribute is set to TRUE, it is no longer present from a DNS perspective.
+The DNS service checks the zone stored in AD periodically for records with a dnsTombstoned attribute that was set to TRUE greater than 7 days. These records are then deleted from the AD database. At this point the deletion is just like a normal AD object deletion in which the record is marked isDeleted and moved into the deleted objects container.
+PROBLEM: DNS record stored in Active Directory is deleted. Instructions are required on how to properly enable auditing to determine what caused the deletion and what type of "deletion" it was.
+CAUSE: Depending on the method/API used to delete a record two types of object access types needs to be enabled to catch both scenarios.
+RESOLUTION: When a DNS record is deleted using the DNS mmc, it simply changes the DNSTombstoned attribute to TRUE. If a new replacement record is created with the same name, the same tombstoned record simply has its DNSTombstoned attribute changed to FALSE. Thus, the GUID remains the same after "deletions".
+If the entire object is deleted, such as with an LDAP delete operation, it is only logged if auditing of object deletions is enabled. If the object is deleted as a normal Active Directory object (such as with an LDAP delete command using interfaces such as ADSIEDIT or LDP) an audit event 566 referencing an access type of DELETE is recorded.
+HOWTO: Set up DNS auditing for records that disappear from the zone1.Enable Directory Service Access auditing in your default Domain Policy: - open domain security policy - navigate to Local Policies -> Audit Policy - Define "Audit directory service access" for success and failure - Refresh domain policy on all domain controllers
+2. Enable auditing on the zone - open AdsiEdit - Navigate to the location of your DNS zone - Right click the zone to audit and choose properties. - go to the security tab, click the advanced button - select the Auditing tab and click Add - for the user or group, type in Everyone - On the Object tab, select Success and Failure for the following Access types: -- Write All Properties, Read All properties, Delete and Delete Subtree - OK out of the policy and refresh the policy again.
+3. When a record is deleted from DNS the following event is logged in the Security
+Event log: Event ID: 566
+Source: SecurityType: Success
+Category: Directory Service Access
+Description: Will post a message similar to following:
+Object Name: DC=recordname,DC=domain,DC=domain,CN=System,DC=dcname,DC=domain
+Properties: Write Property Default property set dnsRecord dNSTombstoned
+
+Posted by Chandan Patralekh at 10:58 PM 0 comments 
