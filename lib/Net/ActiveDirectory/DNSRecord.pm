@@ -10,6 +10,8 @@ use Net::ActiveDirectory::DNSRecord::PTR;
 use Net::ActiveDirectory::DNSRecord::SOA;
 use Net::ActiveDirectory::DNSRecord::SRV;
 use Net::ActiveDirectory::DNSRecord::TXT;
+use Net::ActiveDirectory::DNSRecord::Tombstone;
+use Net::ActiveDirectory::DNSRecord::WINS;
 # We need a lot more sub-modules here but these are the ones I need to decode right now...
 
 use Data::Dumper;
@@ -56,7 +58,7 @@ sub n2ip{
 #
 sub int_type{
     my $self = shift;
-    my @types = ( "Standards_Action", 'A', 'NS', 'MD', 'MF', 'CNAME', 'SOA', 
+    my @types = ( "Tombstone", 'A', 'NS', 'MD', 'MF', 'CNAME', 'SOA', 
                   'MB', 'MG', 'MR', 'NULL', 'WKS', 'PTR', 'HINFO', 'MINFO', 
                   'MX', 'TXT', 'RP', 'AFSDB', 'X25', 'ISDN', 'RT', 'NSAP', 
                   'NSAP-PTR', 'SIG', 'KEY', 'PX', 'GPOS', 'AAAA', 'LOC', 
@@ -73,7 +75,7 @@ sub int_type{
 sub type{
     my $self = shift;
     return $self->{'type'} if $self->{'type'};
-    my @types = ( "Standards_Action", 'A', 'NS', 'MD', 'MF', 'CNAME', 'SOA', 
+    my @types = ( "Tombstone", 'A', 'NS', 'MD', 'MF', 'CNAME', 'SOA', 
                   'MB', 'MG', 'MR', 'NULL', 'WKS', 'PTR', 'HINFO', 'MINFO', 
                   'MX', 'TXT', 'RP', 'AFSDB', 'X25', 'ISDN', 'RT', 'NSAP', 
                   'NSAP-PTR', 'SIG', 'KEY', 'PX', 'GPOS', 'AAAA', 'LOC', 
@@ -98,7 +100,9 @@ sub type{
    if (($self->{'int_type'} >= 57344)&& ($self->{'int_type'} <= 65279)){
        $type = "Specification_Required" unless $type;
    }
-   if (($self->{'int_type'} >= 65280)&& ($self->{'int_type'} <= 65534)){
+   if ($self->{'int_type'} == 65280){ $type = "Reserved_for_Private_Use" unless $type; }
+   if ($self->{'int_type'} == 65281){ $type = "WINS" unless $type; }
+   if (($self->{'int_type'} >= 65282)&& ($self->{'int_type'} <= 65534)){
        $type = "Reserved_for_Private_Use" unless $type;
    }
    if ($self->{'int_type'} == 65535){

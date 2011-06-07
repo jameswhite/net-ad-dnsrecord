@@ -102,7 +102,7 @@ sub add{
     $cnstr->{'textdata'} = $cnstr->{'data'} if $cnstr->{'data'};
     my $dnsrecord = Net::ActiveDirectory::DNSRecord->craft($cnstr);
     ############################################################################
-    if($self->nslookup($query, $type)){ # the record exists, so we only need update it.
+    if($self->nslookup($query)){ # the record exists, so we only need update it.
     ############################################################################
         print "Will update.\n";
         my $mesg = $self->{'ldap'}->search(
@@ -116,23 +116,30 @@ sub add{
                 print STDERR "multiple ldap entries found for $query\n";
                 #print Data::Dumper->Dump([@dcs]);
             }else{
-                my @dnsrecords=$entry->get_value('dnsRecord');
+                my @dnsrecords = $entry->get_value('dnsRecord');
                 # look for an exact match
                  my $exists=0;
                  foreach my $dnsrec (@dnsrecords){
                      my $recobj = Net::ActiveDirectory::DNSRecord->new($dnsrec);
-                     print "in ad   :[".$dnsrecord->hexdata."]\n";
-                     print "we add  :[".$recobj->hexdata."]\n";
                      if($dnsrecord->rdata->zoneform eq $recobj->rdata->zoneform){
                          print "[".$dnsrecord->rdata->zoneform."] [".$recobj->rdata->zoneform."]\n";
                          $exists=1;
                      }
                  }
                  if($exists == 0){
-                    push(@dnsrecords,$dnsrecord->raw_record);
-                    $entry->replace('dnsRecord'=>\@dnsrecords);
-                    $mesg=$entry->update( $self->{'ldap'});
-                    print STDERR $mesg->error if $mesg->code;
+                     my @allrecords;
+                     foreach my $dnsrec (@dnsrecords){
+                         my $recobj = Net::ActiveDirectory::DNSRecord->new($dnsrec);
+                         if($recobj->type ne 'Tombstone'){  # remove the tombstone record and attr
+                             push(@allrecords, $dnsrec);
+                         } 
+                     }
+                     $entry->delete('dNSTombstoned') if $entry->get_value('dNSTombstoned');
+
+                     push(@allrecords,$dnsrecord->raw_record); # add the new record
+                     $entry->replace('dnsRecord'=>\@allrecords);
+                     $mesg=$entry->update( $self->{'ldap'});   # and update LDAP
+                     print STDERR $mesg->error if $mesg->code;
                  }else{
                     print STDERR "Duplicate entry, taking no action.\n";
                  }
@@ -156,7 +163,6 @@ sub add{
                       'showInAdvancedViewOnly' => 'TRUE',
                       'dnsRecord'              => $raw,
                     );
-        print STDERR "            >".unpack("h*",$record->get_value('dnsRecord'))."<\n";
         my $mesg = $record->update( $self->{'ldap'} );
         if($mesg->code){
             print STDERR $mesg->error."\n";
@@ -209,12 +215,22 @@ sub delete{
             }
         }
         if($update_needed == 1){ 
+print STDERR "newrecords: $#newrecords\n";
             if($#newrecords < 0){ 
-                $entry->delete; 
+                my $tombstone = Net::ActiveDirectory::DNSRecord->craft({
+                                                                         'type'=> 'Tombstone',
+                                                                         'data'=> time,
+                                                                       });
+                $entry->add('dNSTombstoned' => 'TRUE');
+                $entry->replace( 'dnsRecord' => $tombstone->raw_record); 
+foreach my $value ($entry->get_value('dNSRecord')){
+    print "dnsrecord ".unpack('h*',$value)."\n";
+}
             }else{
                 $entry->replace( 'dnsRecord' => \@newrecords ); 
             }
             my $mesg = $entry->update( $self->{'ldap'} );
+            print STDERR $mesg->code.": ".$mesg->error."\n";
             if($mesg->code){
                 print STDERR $mesg->error."\n";
                 return undef;

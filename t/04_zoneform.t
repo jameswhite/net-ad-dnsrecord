@@ -7,18 +7,13 @@ BEGIN {
       }
 ################################################################################
 # site-specific things
-my ($USER, $DOMAIN) = ("jameswhite","eftdomain.net");
+my ($USER, $DOMAIN, $SUBNET) = ("jameswhite","eftdomain.net");
 ################################################################################
 my $ad = Net::ActiveDirectory->new({
                                      'domain'   => "$DOMAIN",
                                      'username' => "$USER",
                                      'password' => $ENV{'WINDOWS_PASSWORD'},
                                   });
-
-$ad->exists("ant01.eftdoamin.net IN A 192.168.2.222");
-$ad->exists("192.168.2.222 IN PTR ant01.eftdomain.net");
-$ad->exists("192.168.2.222 IN PTR ant01.eftdomain.net");
-
 
 my @zones = $ad->all_zones;
 print join(":",@zones)."\n";

@@ -36,7 +36,7 @@ foreach my $zone ($mesg->entries){
     }
 }
 
-my $dump=1;
+my $dump=0;
 if($dump){
     print "dns:\n";
     foreach my $z (sort(keys(%{$dns}))){
@@ -47,7 +47,6 @@ if($dump){
                 print "          - ".$r->rdata->zoneform.
                       " ttl: ". $r->TTL .
                       " timestamp: ". $r->timestamp .
-                      " DNS type: ". $r->type . "(".$r->{'int_type'}.")".
                       #" unknown_0: ". $r->unknown_0 .
                       #" unknown_1: ". $r->unknown_1 .
                       "\n";
