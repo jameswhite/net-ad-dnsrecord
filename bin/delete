@@ -1,6 +1,0 @@
-#!/bin/bash
-ldapdelete -h cronus.eftdomain.net \
-           -D "jameswhite@eftdomain.net" \
-           -w ${WINDOWS_PASSWORD}  \
-           "DC=tesla-dr,DC=eftdomain.net,CN=MicrosoftDNS,CN=System,DC=eftdomain,DC=net"
-

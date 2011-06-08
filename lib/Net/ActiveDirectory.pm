@@ -91,6 +91,14 @@ sub add{
     my $self = shift;
     my $cnstr = shift;
     my $record = Net::LDAP::Entry->new;
+    # Because we can't be sure if the fqdn will have a trailing . or not.
+    if($cnstr->{'type'}){
+        if($cnstr->{'data'}){
+            if($cnstr->{'type'} eq 'PTR'){
+                $cnstr->{'data'}.="." unless $cnstr->{'data'}=~m/\.$/;
+            }
+        }
+    }
     my $query = $cnstr->{'name'}; 
     my $type = $cnstr->{'type'};
     my $oldzone = $self->zone;
@@ -180,6 +188,19 @@ sub add{
 sub delete{
     my $self = shift;
     my $cnstr = shift;
+    my $oldzone = $self->zone;
+    if($cnstr->{'zone'}){
+        $self->zone($cnstr->{'zone'});
+        delete $cnstr->{'zone'};
+    }
+    # Because we can't be sure if the fqdn will have a trailing . or not.
+    if($cnstr->{'type'}){
+        if($cnstr->{'data'}){
+            if($cnstr->{'type'} eq 'PTR'){
+                $cnstr->{'data'}.="." unless $cnstr->{'data'}=~m/\.$/;
+            }
+        }
+    }
     my $delrecord = Net::ActiveDirectory::DNSRecord->craft($cnstr);
     return undef unless $cnstr->{'name'};
     my $query = $cnstr->{'name'};
@@ -195,6 +216,7 @@ sub delete{
                );
     if($mesg->code){
         print STDERR $mesg->error."\n";
+        $self->zone($oldzone);
         return undef;
     }
     foreach my $entry ($mesg->entries){
@@ -215,7 +237,6 @@ sub delete{
             }
         }
         if($update_needed == 1){ 
-print STDERR "newrecords: $#newrecords\n";
             if($#newrecords < 0){ 
                 my $tombstone = Net::ActiveDirectory::DNSRecord->craft({
                                                                          'type'=> 'Tombstone',
@@ -223,9 +244,6 @@ print STDERR "newrecords: $#newrecords\n";
                                                                        });
                 $entry->add('dNSTombstoned' => 'TRUE');
                 $entry->replace( 'dnsRecord' => $tombstone->raw_record); 
-foreach my $value ($entry->get_value('dNSRecord')){
-    print "dnsrecord ".unpack('h*',$value)."\n";
-}
             }else{
                 $entry->replace( 'dnsRecord' => \@newrecords ); 
             }
@@ -233,10 +251,12 @@ foreach my $value ($entry->get_value('dNSRecord')){
             print STDERR $mesg->code.": ".$mesg->error."\n";
             if($mesg->code){
                 print STDERR $mesg->error."\n";
+                $self->zone($oldzone);
                 return undef;
             }
         }
     }
+    $self->zone($oldzone);
     return $self;
 }
 

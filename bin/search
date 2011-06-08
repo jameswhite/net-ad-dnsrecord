@@ -1,12 +1,26 @@
 #!/bin/bash
-domain=$1
-[ -z "${domain}" ] && domain="eftdomain.net"
-ldapsearch -h cronus.eftdomain.net \
-           -b "dc=${domain},cn=MicrosoftDNS,cn=System,dc=eftdomain,dc=net" \
-           -D "jameswhite@eftdomain.net" \
+################################################################################
+# Usage:
+# export WINDOWS_USERNAME="jameswhite"
+# export WINDOWS_PASSWORD="thisismypassw0rd.n0.n0treally."
+# search example.org 1.168.192.in-addr.arpa | less
+################################################################################
+
+DOMAIN=$1 # the Active Directory "domain"
+ZONE=$1   # the dnz zone "domain"
+
+[ -z "${DOMAIN}" ] && DOMAIN="$(dnsdomainname)"
+[ -z "${ZONE}" ] && ZONE="${DOMAIN}"
+BASEDN="dc=$(echo ${DOMAIN} | sed -e 's/\./,dc=/g')"
+ldapsearch -h ${DOMAIN} \
+           -b "dc=${DOMAIN},cn=MicrosoftDNS,cn=System,${BASEDN}" \
+           -D "${WINDOWS_USERNAME}@${DOMAIN}" \
            -s sub -xw ${WINDOWS_PASSWORD} \
            "(objectClass=dnsNode)" \
            | tr "\n" "" | sed -e 's/ //g' | tr "" "\n"
+
+
+
 #           | grep "^dnsRecord"|sed -e 's/dnsRecord:: //' \
 #           |while read line ;do \
 #               perl -le 'use MIME::Base64;print unpack("h*",decode_base64($ARGV[0]));' ${line}; 

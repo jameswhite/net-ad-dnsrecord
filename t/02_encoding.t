@@ -8,7 +8,7 @@ BEGIN {
         use_ok('Net::ActiveDirectory');
       }
 ################################################################################
-my ($USER, $DOMAIN) =("jameswhite", "eftdomain.net"); 
+my ($USER, $DOMAIN) =("$ENV{'WINDOWS_USERNAME'}", "$ENV{'WINDOWS_DOMAIN'}"); 
 my $BASEDN="DC=".join(",DC=",split(/\./,$DOMAIN));
 ################################################################################
 my $dns;

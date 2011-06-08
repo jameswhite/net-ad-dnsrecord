@@ -8,11 +8,11 @@ BEGIN {
         use_ok('Net::ActiveDirectory');
       }
 ################################################################################
-my ($USER, $DOMAIN) =("jameswhite", "eftdomain.net"); 
+my ($USER, $DOMAIN) =("$ENV{'WINDOWS_USERNAME'}", "$ENV{'WINDOWS_DOMAIN'}"); 
 my $BASEDN="DC=".join(",DC=",split(/\./,$DOMAIN));
 ################################################################################
 my $dns;
-my $ad = Net::LDAP->new( $DOMAIN ) or return undef;
+my $ad = Net::LDAP->new( $DOMAIN ) or exit;
 $ad->bind( $USER.'@'.$DOMAIN, password => $ENV{'WINDOWS_PASSWORD'} );
 my $mesg = $ad->search(
                         'base'   => "cn=MicrosoftDNS,cn=System,".$BASEDN,
