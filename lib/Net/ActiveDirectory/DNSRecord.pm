@@ -1,7 +1,7 @@
 package Net::ActiveDirectory::DNSRecord;
 # hat-tip http://www.indented.co.uk/index.php/2009/06/18/mapping-the-dnsrecord-attribute/
-use Net::ActiveDirectory::DNSRecord::Reserved_for_Private_Use;
-use Net::ActiveDirectory::DNSRecord::Standards_Action;
+use Net::ActiveDirectory::DNSRecord::Reserved_for_Private_Use; # WINS
+use Net::ActiveDirectory::DNSRecord::Standards_Action;         # Tombstone == 0
 use Net::ActiveDirectory::DNSRecord::A;
 use Net::ActiveDirectory::DNSRecord::CNAME;
 use Net::ActiveDirectory::DNSRecord::MX;

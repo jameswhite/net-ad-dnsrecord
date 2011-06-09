@@ -87,6 +87,123 @@ sub nslookup{ #ok
     return @records;
 }
 
+################################################################################
+# Methods to parse the zone-style methods and hand them to add/delete
+#
+sub closest_zone{
+    my $self = shift;
+    my $zone = shift if @_;
+    return undef unless $zone;
+    my $found=0;
+    my @zoneparts;
+    my @zoneparts = split(/\./,$zone);
+    my $name_part='';
+    while($found == 0){
+        $name_part.=".".shift(@zoneparts);
+        if($self->zone_exists(join('.',@zoneparts))){
+            $found = 1;
+        }
+    }
+    return join('.',@zoneparts);
+}
+
+sub zone_exists{
+    my $self = shift;
+    my $zone = shift if @_;
+    my @zones = $self->all_zones;
+    my $found_it=0;
+    foreach my $z (@zones){
+        if($zone eq $z){ $found_it = 1; } 
+    }
+    unless($found_it){
+        return 0;
+    }
+    return 1;
+}
+
+sub hashify{
+    my $self = shift;
+    if($#_ == 1){
+        my ($zone, $record) = (@_);
+        return undef unless $self->zone_exists($zone);
+        my $oldzone = $self->zone;
+        $self->zone($zone);
+        my ($name, $ttl, $type, $data);
+        if($record=~m/\s*(\S+)\s*\S*\s+IN\s+/){ $name = $1; }
+        if($record=~m/\s*\S+\s+(\S+)\s+IN/){ $ttl = $1; }
+        if($record=~m/\s+IN\s+(\S+)\s+(.*)/){ $type = $1; $data = $2; }
+        $ttl = $self->soa->TTL unless $ttl;
+        $self->zone($oldzone);
+        return {
+                 'zone' => $zone,
+                 'name' => $name,
+                 'ttl' => $ttl,
+                 'type' => $type,
+                 'data' => $data,
+               };
+    }elsif($#_ == 0){
+        my ($record) = (@_);
+        my ($fqdn, $name, $ttl, $type, $data, $fqip, $zone);
+        if($record=~m/\s*(\S+)\s*\S*\s+IN\s+/){ $fqdn = $1; }
+        if($record=~m/\s*\S+\s+(\S+)\s+IN/){ $ttl = $1; }
+        if($record=~m/\s+IN\s+(\S+)\s+(.*)/){ $type = $1; $data = $2; }
+
+        if( !$self->zone_exists($zone) ){ $zone=$self->closest_zone($fqdn); }
+        $name=$fqdn;
+        $name=~s/\.$//;
+        $name=~s/\.$zone$//g;
+
+        my $oldzone = $self->zone;
+        $self->zone($zone);
+        $ttl = $self->soa->TTL unless $ttl;
+        $self->zone($oldzone);
+        return {
+                 'zone' => $zone,
+                 'name' => $name,
+                 'ttl' => $ttl,
+                 'type' => $type,
+                 'data' => $data,
+               };
+    }
+}
+
+sub addrecord{
+    my $self = shift;
+    my $hashform = $self->hashify(@_);
+    print STDERR "ADDRECORD\n";
+    print STDERR Data::Dumper->Dump([$hashform]);
+    
+}
+
+sub delrecord{
+    my $self = shift;
+    my $hashform = $self->hashify(@_);
+    print STDERR "DELRECORD\n";
+    print STDERR Data::Dumper->Dump([$hashform]);
+}
+
+# add an A <---> PTR pair
+sub addpair{
+    my $self = shift;
+    print STDERR "addpair\n";
+    return $self;
+}
+
+# add an A <---> PTR pair
+sub delpair{
+    my $self = shift;
+    print STDERR "delpair\n";
+    return $self;
+}
+
+################################################################################
+# check all regeistered nameservers for propagation 
+sub fully_propagated{
+    my $self = shift;
+    print STDERR "fully propagated\n";
+    return $self;
+}
+
 sub add{
     my $self = shift;
     my $cnstr = shift;

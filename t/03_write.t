@@ -24,7 +24,6 @@ if(1){
     foreach my $record (@records){
         print $record->rdata->zoneform."\n" unless($record->rdata->zoneform=~m/unparsed/);
     }
-    
     print "--\n";
     @records = $ad->nslookup('@','NS');
     foreach my $record (@records){
