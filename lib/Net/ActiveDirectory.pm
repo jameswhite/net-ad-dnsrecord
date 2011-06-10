@@ -90,6 +90,23 @@ sub nslookup{ #ok
 ################################################################################
 # Methods to parse the zone-style methods and hand them to add/delete
 #
+sub closest_arpa{
+    my $self = shift;
+    my $ip = shift if @_;
+    return undef unless $ip;
+    my $found=0;
+    my @octets = split(/\./,$ip);
+    my $hostocts='';
+    while($found == 0){
+        $hostocts.=".".pop(@octets);
+        if($self->zone_exists( join('.',reverse(@octets)).".in-addr.arpa")){
+            $found = 1;
+        }
+    }
+    return join('.',reverse(@octets)).".in-addr.arpa" if @octets;
+    return undef;
+}
+
 sub closest_zone{
     my $self = shift;
     my $zone = shift if @_;
@@ -185,14 +202,70 @@ sub delrecord{
 # add an A <---> PTR pair
 sub addpair{
     my $self = shift;
-    print STDERR "addpair\n";
+    my ($fqdn, $fqip) = ( @_ );
+    $fqdn=~s/\.$//;
+    $fqip=~s/\.$//;
+    my $zone = $self->closest_zone($fqdn);
+    my $name=$fqdn;
+    $name=~s/\.$zone$//g;
+
+    my $arpa = $self->closest_arpa($fqip);
+    my @subnet = split(/\./,$arpa);
+    pop(@subnet); pop(@subnet);
+    my $host_oct = $fqip;
+    my $subnet = join('.',reverse(@subnet));
+    $host_oct=~s/^$subnet.//;
+    
+    print STDERR "ADDPAIR\n";
+    print STDERR Data::Dumper->Dump([{
+                                       'name' => $name,
+                                       'zone' => $zone,
+                                       'type' => 'A',
+                                       'data' => $fqip,
+                           }]);
+
+    print STDERR Data::Dumper->Dump([{
+                                       'name' => $host_oct,
+                                       'zone' => $arpa,
+                                       'type' => 'PTR',
+                                       'data' => $fqdn,
+                           }]);
+
     return $self;
 }
 
 # add an A <---> PTR pair
 sub delpair{
     my $self = shift;
-    print STDERR "delpair\n";
+    my ($fqdn, $fqip) = ( @_ );
+    $fqdn=~s/\.$//;
+    $fqip=~s/\.$//;
+    my $zone = $self->closest_zone($fqdn);
+    my $name=$fqdn;
+    $name=~s/\.$zone$//g;
+
+    my $arpa = $self->closest_arpa($fqip);
+    my @subnet = split(/\./,$arpa);
+    pop(@subnet); pop(@subnet);
+    my $host_oct = $fqip;
+    my $subnet = join('.',reverse(@subnet));
+    $host_oct=~s/^$subnet.//;
+    
+    print STDERR "DELPAIR\n";
+    print STDERR Data::Dumper->Dump([{
+                                       'name' => $name,
+                                       'zone' => $zone,
+                                       'type' => 'A',
+                                       'data' => $fqip,
+                           }]);
+
+    print STDERR Data::Dumper->Dump([{
+                                       'name' => $host_oct,
+                                       'zone' => $arpa,
+                                       'type' => 'PTR',
+                                       'data' => $fqdn,
+                           }]);
+
     return $self;
 }
 
