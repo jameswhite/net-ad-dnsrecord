@@ -20,7 +20,7 @@ $ad->addrecord( $zone, "somehost IN A 192.168.2.225"                      # add 
 $ad->addrecord( "2.168.192.in-addr.arpa", "225 IN PTR somehost.$zone." ); # add a PTR
 
 $ad->addrecord( "$zone", "_ldap._tcp IN SRV 0 10 389 192.168.2.225"       # zone, entry form
-$ad->addrecord( "_ldap._tcp.$zone. 86400 IN SRV 0 10 389 192.168.2.225"); # all-one-arguement form
+$ad->addrecord( "_ldap._tcp.$zone. 86400 IN SRV 0 10 389 192.168.2.225"); # all-one-arguement form (w/optional ttl)
 
 
 # Delete the same records from a zone with the same formats
