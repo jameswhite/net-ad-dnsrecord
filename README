@@ -8,6 +8,7 @@ Use this at your own peril. I do.
 #
 
 use Net::ActiveDirectory;
+my $zone="example.org";
 my $ad = Net::ActiveDirectory->new({
                                      'domain'   => $ENV{'WINDOWS_DOMAIN'},      # example.org
                                      'username' => $ENV{'WINDOWS_USERNAME'},    # joe (not joe@example.org or EXAMPLE\joe)
@@ -15,25 +16,28 @@ my $ad = Net::ActiveDirectory->new({
                                    });
 
 # Add some records to a zone
-$ad->addrecord( "$ENV{'WINDOWS_DOMAIN'}",          "somehost IN A 192.168.2.225" 
-$ad->addrecord( "2.168.192.in-addr.arpa", "225 IN PTR somehost.$ENV{'WINDOWS_DOMAIN'}." ); 
-$ad->addrecord( "$ENV{'WINDOWS_DOMAIN'}", "_ldap._tcp IN SRV 0 10 389 192.168.2.225"    
-$ad->addrecord( "_ldap._tcp.$ENV{'WINDOWS_DOMAIN'}. 86400 IN SRV 0 10 389 192.168.2.225");
+$ad->addrecord( $zone, "somehost IN A 192.168.2.225"                      # add an A record
+$ad->addrecord( "2.168.192.in-addr.arpa", "225 IN PTR somehost.$zone." ); # add a PTR
+
+$ad->addrecord( "$zone", "_ldap._tcp IN SRV 0 10 389 192.168.2.225"       # zone, entry form
+$ad->addrecord( "_ldap._tcp.$zone. 86400 IN SRV 0 10 389 192.168.2.225"); # all-one-arguement form
 
 
-# Delete the same records from a zone
-$ad->delrecord( "$ENV{'WINDOWS_DOMAIN'}",          "somehost IN A 192.168.2.225" 
-$ad->delrecord( "2.168.192.in-addr.arpa", "225 IN PTR somehost.$ENV{'WINDOWS_DOMAIN'}." ); 
-$ad->delrecord( "$ENV{'WINDOWS_DOMAIN'}", "_ldap._tcp IN SRV 0 10 389 192.168.2.225"    
-$ad->delrecord( "_ldap._tcp.$ENV{'WINDOWS_DOMAIN'}. 86400 IN SRV 0 10 389 192.168.2.225");
+# Delete the same records from a zone with the same formats
+$ad->delrecord( $zone, "somehost IN A 192.168.2.225" 
+$ad->delrecord( "2.168.192.in-addr.arpa", "225 IN PTR somehost.$zone." ); 
 
+$ad->delrecord( "$zone", "_ldap._tcp IN SRV 0 10 389 192.168.2.225"    
+$ad->delrecord( "_ldap._tcp.$zone. 86400 IN SRV 0 10 389 192.168.2.225");
 
 # or add a reciprocal pair (this will add / delete the A and PTR for both)
-$ad->addpair( "somehost.$ENV{'WINDOWS_DOMAIN'}", "192.168.2.225" );
-$ad->delpair( "somehost.$ENV{'WINDOWS_DOMAIN'}", "192.168.2.225" );
+# (it needs the fqdn / full IP to detect the zone file)
+$ad->addpair( "somehost.$zone", "192.168.2.225" );
+$ad->delpair( "somehost.$zone", "192.168.2.225" );
+
 
 # this will return if all NS servers have the record (this can take 15 minutes with mixed-mode domains)
 # I use them to loop until all servers have the record before continuing an operation that depends on DNS
-$ad->add_propagated("somehost.example.org IN A 192.168.2.225");
-$ad->del_propagated("somehost.example.org IN A 192.168.2.225");
+$ad->add_propagated("somehost.$zone IN A 192.168.2.225");
+$ad->del_propagated("somehost.$zone IN A 192.168.2.225");
 
