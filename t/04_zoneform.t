@@ -51,4 +51,5 @@ $ad->delpair( "somehost.eftdomain.net", "192.168.2.225" );
 
 # this will lookup all the nameservers on the domain
 
-$ad->fully_propagated("somehost IN A 192.168.2.225");
+$ad->add_propagated("somehost IN A 192.168.2.225");
+$ad->del_propagated("somehost IN A 192.168.2.225");

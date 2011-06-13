@@ -1,6 +1,7 @@
 #  This is basically an abstraction layer around Net::LDAP to use conventions that Active Directory uses
 package Net::ActiveDirectory;
 use Net::ActiveDirectory::DNSRecord;
+use Net::DNS;
 use Data::Dumper;
 use MIME::Base64;
 use Net::LDAP;
@@ -13,6 +14,11 @@ sub new{ #ok
     my $cnstr = shift if @_;
     my $self = {};
     bless $self, $class;
+    if($cnstr->{'debug'}){ 
+        $self->debug($cnstr->{'debug'});
+    }else{
+        $self->debug(0) ;
+    };
     if($cnstr->{'username'}){ $self->username($cnstr->{'username'}) };
     if($cnstr->{'password'}){ $self->password($cnstr->{'password'}) };
     if($cnstr->{'domain'}){ $self->domain($cnstr->{'domain'}) };
@@ -38,6 +44,35 @@ sub new{ #ok
     return $self;
 }
 
+
+sub get_resolvers{
+    my $self = shift;
+    my $zone = shift;
+    $zone = $self->zone unless $zone;
+    my $oldzone = $self->zone;
+    my @records = $self->nslookup('@', 'NS');
+    foreach my $record (@records){
+        my $nameserver = $record->{'rdata'}->ns;
+        my $resolver = Net::DNS::Resolver->new(
+                                                nameservers => [$nameserver],
+                                                recurse     => 0,
+                                                debug       => 0,
+                                              );
+        my $query = $resolver->search($nameserver);
+        if ($query) {
+            foreach my $rr ($query->answer) {
+                next unless $rr->type eq "A";
+                #print $nameserver.": ".$rr->address, "\n";
+            }
+            push(@{ $self->{'resolvers'}->{$zone} },$resolver);
+        } else {
+            warn "query failed: ", $resolver->errorstring, "\n";
+        }
+    }
+    $self->zone($oldzone);
+    return $self;
+}
+
 sub all_zones{ #ok
     my $self = shift;
     my @zones;
@@ -52,6 +87,78 @@ sub all_zones{ #ok
     }
     return @zones;
 }
+
+sub add_propagated{
+    my $self = shift;
+    my $hashform = $self->hashify(@_);
+    #print STDERR Data::Dumper->Dump([$hashform]);
+    $self->get_resolvers($hashform->{'zone'}) unless(defined($self->{'resolvers'}->{$hashform->{'zone'}})); 
+    my $fully_propagated=0;
+    foreach my $res (@{ $self->{'resolvers'}->{$hashform->{'zone'}}}){
+        my $query;
+        if($hashform->{'type'} eq 'A'){ 
+            #print "Searching [".join(",",$res->nameservers)."] for $hashform->{'name'}.$hashform->{'zone'}\n";
+            $query = $res->search("$hashform->{'name'}.$hashform->{'zone'}");
+        }elsif($hashform->{'type'} eq 'PTR'){ 
+            #print "Searching [".join(",",$res->nameservers)."] for $hashform->{'subnet'}.$hashform->{'name'}\n";
+            $query = $res->search("$hashform->{'subnet'}.$hashform->{'name'}");
+        }
+        if ($query) {
+            foreach my $rr ($query->answer) {
+                next unless $rr->type eq $hashform->{'type'};
+                if($hashform->{'type'} eq 'A'){ 
+                    if($rr->address eq $hashform->{'data'}){ $fully_propagated++; }
+                }elsif($hashform->{'type'} eq 'PTR'){ 
+                    if($rr->ptrdname eq $hashform->{'data'}){ $fully_propagated++; }
+                }
+            }
+        #} else {
+        #    print STDERR "    ".$res->errorstring, "\n";
+        }
+    }
+    my $resolver_count = $#{ $self->{'resolvers'}->{$hashform->{'zone'}}} + 1;
+    print "$hashform->{'name'}.$hashform->{'zone'} is $hashform->{'data'} on [ ".$fully_propagated ." / ".$resolver_count ." ] nameservers.\n" if($self->debug);
+    return 1 if($fully_propagated == $resolver_count);
+    #print STDERR  Data::Dumper->Dump([$hashform]);
+    return 0;
+}
+
+
+sub del_propagated{
+    my $self = shift;
+    my $hashform = $self->hashify(@_);
+    #print STDERR Data::Dumper->Dump([$hashform]);
+    $self->get_resolvers($hashform->{'zone'}) unless(defined($self->{'resolvers'}->{$hashform->{'zone'}}));
+    my $fully_propagated=0;
+    foreach my $res (@{ $self->{'resolvers'}->{$hashform->{'zone'}}}){
+        my $query;
+        if($hashform->{'type'} eq 'A'){
+            #print "Searching [".join(",",$res->nameservers)."] for $hashform->{'name'}.$hashform->{'zone'}\n";
+            $query = $res->search("$hashform->{'name'}.$hashform->{'zone'}");
+        }elsif($hashform->{'type'} eq 'PTR'){
+            #print "Searching [".join(",",$res->nameservers)."] for $hashform->{'subnet'}.$hashform->{'name'}\n";
+            $query = $res->search("$hashform->{'subnet'}.$hashform->{'name'}");
+        }
+        if ($query) {
+            foreach my $rr ($query->answer) {
+                next unless $rr->type eq $hashform->{'type'};
+                if($hashform->{'type'} eq 'A'){
+                    if($rr->address eq $hashform->{'data'}){ $fully_propagated++; }
+                }elsif($hashform->{'type'} eq 'PTR'){
+                    if($rr->ptrdname eq $hashform->{'data'}){ $fully_propagated++; }
+                }
+            }
+        #} else {
+        #    print STDERR "    ".$res->errorstring, "\n";
+        }
+    }
+    my $resolver_count = $#{ $self->{'resolvers'}->{$hashform->{'zone'}}} + 1;
+    print "$hashform->{'name'}.$hashform->{'zone'} is $hashform->{'data'} on [ ".$fully_propagated ." / ".$resolver_count ." ] nameservers.\n" if($self->debug);
+    return 1 if($fully_propagated == 0);
+    #print STDERR  Data::Dumper->Dump([$hashform]);
+    return 0;
+}
+
 
 sub nslookup{ #ok
     my $self=shift;
@@ -164,39 +271,65 @@ sub hashify{
         if($record=~m/\s*(\S+)\s*\S*\s+IN\s+/){ $fqdn = $1; }
         if($record=~m/\s*\S+\s+(\S+)\s+IN/){ $ttl = $1; }
         if($record=~m/\s+IN\s+(\S+)\s+(.*)/){ $type = $1; $data = $2; }
-
-        if( !$self->zone_exists($zone) ){ $zone=$self->closest_zone($fqdn); }
-        $name=$fqdn;
-        $name=~s/\.$//;
-        $name=~s/\.$zone$//g;
-
-        my $oldzone = $self->zone;
-        $self->zone($zone);
-        $ttl = $self->soa->TTL unless $ttl;
-        $self->zone($oldzone);
-        return {
-                 'zone' => $zone,
-                 'name' => $name,
-                 'ttl' => $ttl,
-                 'type' => $type,
-                 'data' => $data,
-               };
+        if( !$self->zone_exists($zone) ){ 
+            if($type eq 'PTR'){
+                my $arpa=$self->closest_arpa($fqdn); 
+                my @subnet = split(/\./,$arpa);
+                pop(@subnet); pop(@subnet);
+                my $host_oct = $fqip;
+                my $subnet = join('.',reverse(@subnet));
+                $host_oct=$fqdn;
+                $host_oct=~s/^$subnet.//;
+                $ttl = $self->soa->TTL unless $ttl;
+                return {
+                         'zone' => $arpa,
+                         'name' => $host_oct,
+                         'ttl' => $ttl,
+                         'type' => $type,
+                         'data' => $data,
+                         'subnet' => $subnet,
+                       };
+            }else{
+                $zone=$self->closest_zone($fqdn); 
+                $name=$fqdn;
+                $name=~s/\.$zone$//;
+                my $oldzone = $self->zone;
+                $self->zone($zone);
+                $ttl = $self->soa->TTL unless $ttl;
+                $self->zone($oldzone);
+                return {
+                         'zone' => $zone,
+                         'name' => $name,
+                         'ttl' => $ttl,
+                         'type' => $type,
+                         'data' => $data,
+                       };
+            }
+        }
     }
 }
 
 sub addrecord{
     my $self = shift;
     my $hashform = $self->hashify(@_);
-    print STDERR "ADDRECORD\n";
-    print STDERR Data::Dumper->Dump([$hashform]);
-    
+    $self->add({
+                'zone' => $hashform->{'zone'},
+                'name' => $hashform->{'name'},
+                'type' => $hashform->{'type'},
+                'data' => $hashform->{'data'},
+            });
+
 }
 
 sub delrecord{
     my $self = shift;
     my $hashform = $self->hashify(@_);
-    print STDERR "DELRECORD\n";
-    print STDERR Data::Dumper->Dump([$hashform]);
+    $self->delete({
+                    'zone' => $hashform->{'zone'},
+                    'name' => $hashform->{'name'},
+                    'type' => $hashform->{'type'},
+                    'data' => $hashform->{'data'},
+                 });
 }
 
 # add an A <---> PTR pair
@@ -216,20 +349,18 @@ sub addpair{
     my $subnet = join('.',reverse(@subnet));
     $host_oct=~s/^$subnet.//;
     
-    print STDERR "ADDPAIR\n";
-    print STDERR Data::Dumper->Dump([{
-                                       'name' => $name,
-                                       'zone' => $zone,
-                                       'type' => 'A',
-                                       'data' => $fqip,
-                           }]);
-
-    print STDERR Data::Dumper->Dump([{
-                                       'name' => $host_oct,
-                                       'zone' => $arpa,
-                                       'type' => 'PTR',
-                                       'data' => $fqdn,
-                           }]);
+    $self->add({
+                'zone' => $zone,
+                'name' => $name,
+                'type' => 'A',
+                'data' => $fqip,
+            });
+    $self->add({
+                 'name' => $host_oct,
+                 'zone' => $arpa,
+                 'type' => 'PTR',
+                 'data' => $fqdn,
+              });
 
     return $self;
 }
@@ -251,32 +382,25 @@ sub delpair{
     my $subnet = join('.',reverse(@subnet));
     $host_oct=~s/^$subnet.//;
     
-    print STDERR "DELPAIR\n";
-    print STDERR Data::Dumper->Dump([{
-                                       'name' => $name,
-                                       'zone' => $zone,
-                                       'type' => 'A',
-                                       'data' => $fqip,
-                           }]);
+    $self->delete({
+                    'zone' => $zone,
+                    'name' => $name,
+                    'type' => 'A',
+                    'data' => $fqip,
+                });
+    $self->delete({
+                     'name' => $host_oct,
+                     'zone' => $arpa,
+                     'type' => 'PTR',
+                     'data' => $fqdn,
+                  });
 
-    print STDERR Data::Dumper->Dump([{
-                                       'name' => $host_oct,
-                                       'zone' => $arpa,
-                                       'type' => 'PTR',
-                                       'data' => $fqdn,
-                           }]);
 
     return $self;
 }
 
 ################################################################################
 # check all regeistered nameservers for propagation 
-sub fully_propagated{
-    my $self = shift;
-    print STDERR "fully propagated\n";
-    return $self;
-}
-
 sub add{
     my $self = shift;
     my $cnstr = shift;
@@ -302,12 +426,12 @@ sub add{
     ############################################################################
     if($self->nslookup($query)){ # the record exists, so we only need update it.
     ############################################################################
-        print "Will update.\n";
+        print "Will update.\n" if($self->debug);
         my $mesg = $self->{'ldap'}->search(
                                             'base'   => "dc=".$self->zone.",".$self->dns_base,
                                             'filter' => "(&(objectClass=dnsNode)(DC=$query))",
                                           );
-        print STDERR $mesg->error if $mesg->code;
+        if($self->debug){ print STDERR $mesg->error if $mesg->code; }
         foreach my $entry ($mesg->entries){
             my @dcs = $entry->get_value('dc');
             if($#dcs > 0){
@@ -337,7 +461,7 @@ sub add{
                      push(@allrecords,$dnsrecord->raw_record); # add the new record
                      $entry->replace('dnsRecord'=>\@allrecords);
                      $mesg=$entry->update( $self->{'ldap'});   # and update LDAP
-                     print STDERR $mesg->error if $mesg->code;
+                     if($self->debug){ print STDERR $mesg->error if $mesg->code; }
                  }else{
                     print STDERR "Duplicate entry, taking no action.\n";
                  }
@@ -348,7 +472,7 @@ sub add{
     ############################################################################
     }else{                           # no ldap entry, so create new
     ############################################################################
-        print "Will add.\n";
+        print "Will add.\n" if($self->debug);
         $record->dn("DC=$query,dc=$self->{'zone'},$self->{'dns_base'}");
         my $raw = $dnsrecord->raw_record;
         $record->add(
@@ -438,7 +562,7 @@ sub delete{
                 $entry->replace( 'dnsRecord' => \@newrecords ); 
             }
             my $mesg = $entry->update( $self->{'ldap'} );
-            print STDERR $mesg->code.": ".$mesg->error."\n";
+            print STDERR $mesg->code.": ".$mesg->error."\n" if($self->debug);
             if($mesg->code){
                 print STDERR $mesg->error."\n";
                 $self->zone($oldzone);
@@ -504,6 +628,12 @@ sub username{
     my $self = shift;
     $self->{'username'} = shift if @_;
     return $self->{'username'};
+}
+
+sub debug{
+    my $self = shift;
+    $self->{'debug'} = shift if @_;
+    return $self->{'debug'};
 }
 
 1;
