@@ -204,7 +204,7 @@ sub closest_arpa{
     my $found=0;
     my @octets = split(/\./,$ip);
     my $hostocts='';
-    while($found == 0){
+    while(($found == 0)&&($#octets >0)){
         $hostocts.=".".pop(@octets);
         if($self->zone_exists( join('.',reverse(@octets)).".in-addr.arpa")){
             $found = 1;
@@ -219,21 +219,22 @@ sub closest_zone{
     my $zone = shift if @_;
     return undef unless $zone;
     my $found=0;
-    my @zoneparts;
     my @zoneparts = split(/\./,$zone);
     my $name_part='';
-    while($found == 0){
+    while( ($found == 0) && ($#zoneparts > 0) ){
         $name_part.=".".shift(@zoneparts);
         if($self->zone_exists(join('.',@zoneparts))){
             $found = 1;
         }
     }
-    return join('.',@zoneparts);
+    return join('.',@zoneparts) if $found;
+    return undef;
 }
 
 sub zone_exists{
     my $self = shift;
     my $zone = shift if @_;
+    return 0 unless $zone;
     my @zones = $self->all_zones;
     my $found_it=0;
     foreach my $z (@zones){
@@ -585,12 +586,6 @@ sub soa{ #ok
         print STDERR "Multiple SOAs on zone, returning first one.\n";
     }
     return shift @soas;
-}
-
-sub dns_base{
-    my $self = shift;
-    $self->{'dns_base'} = shift if @_;
-    return $self->{'dns_base'};
 }
 
 sub basedn{

@@ -111,12 +111,6 @@ sub type{
    return $type;
 }
 
-sub update_at_serial{
-    my $self = shift;
-    return $self->{'update_at_serial'} if $self->{'update_at_serial'};
-    return undef;
-}
-
 sub raw_record{ # just so we don't store rawdata and corrupt our tty 
     my $self = shift;
     return pack("h*",$self->hexdata);
@@ -223,7 +217,6 @@ sub rdata_hex{        my $self = shift; $self->{'rdata_hex'} = shift if @_;     
 sub rdata    {        my $self = shift; $self->{'rdata'}     = shift if @_;        return $self->{'rdata'};            }
 sub timestamp{        my $self = shift; $self->{'timestamp'} = shift if @_;        return $self->{'timestamp'};        }
 sub TTL{        my $self = shift; $self->{'TTL'} = shift if @_;        return $self->{'TTL'};        }
-sub rdata_hex{        my $self = shift; $self->{'rdata_hex'} = shift if @_;        return $self->{'rdata_hex'};        }
 sub unknown_0{        my $self = shift; $self->{'unknown_0'} = shift if @_;        return $self->{'unknown_0'};        }
 sub unknown_1{        my $self = shift; $self->{'unknown_1'} = shift if @_;        return $self->{'unknown_1'};        }
 1;
