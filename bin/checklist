@@ -1,0 +1,10 @@
+del all eftdomain.net A,PTR             [OK]
+add all lab.eftdomain.net A,PTR         [OK]
+add all soekris cao.eftdomain.net A,PTR [OK]
+add all printer cao.eftdomain.net A,PTR [OK]
+add all ou=Networks entries             [OK]
+
+add all ou=Hosts entries                [  ]
+add all cn=DHCP entries                 [  ]
+
+add all cn=Operating Systems, entries   [  ]
